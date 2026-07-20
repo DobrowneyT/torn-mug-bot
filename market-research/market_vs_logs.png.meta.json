@@ -1,0 +1,4 @@
+{
+  "caption": "Scatter/step chart comparing Torn user logs vs itemmarket API presence.",
+  "description": "Blue step line shows when the test listing is visible via the itemmarket API; red triangles mark the exact add/remove events from the user log. Useful for visualizing cache delay."
+}

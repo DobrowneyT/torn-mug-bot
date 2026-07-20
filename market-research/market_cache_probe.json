@@ -1,0 +1,3242 @@
+[
+  {
+    "timestamp_utc": "2026-06-23T14:23:55.563690+00:00",
+    "timestamp_unix": 1782224635,
+    "item_id": 682,
+    "key_index": 0,
+    "on_market": false,
+    "cache_timestamp": 1782224581,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:23:55.563690+00:00",
+    "timestamp_unix": 1782224635,
+    "item_id": 2,
+    "key_index": 0,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:23:55.563690+00:00",
+    "timestamp_unix": 1782224635,
+    "item_id": 485,
+    "key_index": 0,
+    "on_market": null,
+    "cache_timestamp": 1782224585,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:23:56.751244+00:00",
+    "timestamp_unix": 1782224636,
+    "item_id": 682,
+    "key_index": 1,
+    "on_market": false,
+    "cache_timestamp": 1782224581,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:23:56.751244+00:00",
+    "timestamp_unix": 1782224636,
+    "item_id": 2,
+    "key_index": 1,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:23:56.751244+00:00",
+    "timestamp_unix": 1782224636,
+    "item_id": 485,
+    "key_index": 1,
+    "on_market": null,
+    "cache_timestamp": 1782224585,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:23:57.816668+00:00",
+    "timestamp_unix": 1782224637,
+    "item_id": 682,
+    "key_index": 2,
+    "on_market": false,
+    "cache_timestamp": 1782224581,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:23:57.816668+00:00",
+    "timestamp_unix": 1782224637,
+    "item_id": 2,
+    "key_index": 2,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:23:57.816668+00:00",
+    "timestamp_unix": 1782224637,
+    "item_id": 485,
+    "key_index": 2,
+    "on_market": null,
+    "cache_timestamp": 1782224585,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:23:59.025186+00:00",
+    "timestamp_unix": 1782224639,
+    "item_id": 682,
+    "key_index": 3,
+    "on_market": false,
+    "cache_timestamp": 1782224581,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:23:59.025186+00:00",
+    "timestamp_unix": 1782224639,
+    "item_id": 2,
+    "key_index": 3,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:23:59.025186+00:00",
+    "timestamp_unix": 1782224639,
+    "item_id": 485,
+    "key_index": 3,
+    "on_market": null,
+    "cache_timestamp": 1782224585,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:00.186949+00:00",
+    "timestamp_unix": 1782224640,
+    "item_id": 682,
+    "key_index": 4,
+    "on_market": false,
+    "cache_timestamp": 1782224581,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:00.186949+00:00",
+    "timestamp_unix": 1782224640,
+    "item_id": 2,
+    "key_index": 4,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:00.186949+00:00",
+    "timestamp_unix": 1782224640,
+    "item_id": 485,
+    "key_index": 4,
+    "on_market": null,
+    "cache_timestamp": 1782224585,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:01.450668+00:00",
+    "timestamp_unix": 1782224641,
+    "item_id": 682,
+    "key_index": 5,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:01.450668+00:00",
+    "timestamp_unix": 1782224641,
+    "item_id": 2,
+    "key_index": 5,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:01.450668+00:00",
+    "timestamp_unix": 1782224641,
+    "item_id": 485,
+    "key_index": 5,
+    "on_market": null,
+    "cache_timestamp": 1782224585,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:02.515824+00:00",
+    "timestamp_unix": 1782224642,
+    "item_id": 682,
+    "key_index": 6,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:02.515824+00:00",
+    "timestamp_unix": 1782224642,
+    "item_id": 2,
+    "key_index": 6,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:02.515824+00:00",
+    "timestamp_unix": 1782224642,
+    "item_id": 485,
+    "key_index": 6,
+    "on_market": null,
+    "cache_timestamp": 1782224585,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:03.568862+00:00",
+    "timestamp_unix": 1782224643,
+    "item_id": 682,
+    "key_index": 7,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:03.568862+00:00",
+    "timestamp_unix": 1782224643,
+    "item_id": 2,
+    "key_index": 7,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:03.568862+00:00",
+    "timestamp_unix": 1782224643,
+    "item_id": 485,
+    "key_index": 7,
+    "on_market": null,
+    "cache_timestamp": 1782224585,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:04.755633+00:00",
+    "timestamp_unix": 1782224644,
+    "item_id": 682,
+    "key_index": 8,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:04.755633+00:00",
+    "timestamp_unix": 1782224644,
+    "item_id": 2,
+    "key_index": 8,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:04.755633+00:00",
+    "timestamp_unix": 1782224644,
+    "item_id": 485,
+    "key_index": 8,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:05.938759+00:00",
+    "timestamp_unix": 1782224645,
+    "item_id": 682,
+    "key_index": 9,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:05.938759+00:00",
+    "timestamp_unix": 1782224645,
+    "item_id": 2,
+    "key_index": 9,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:05.938759+00:00",
+    "timestamp_unix": 1782224645,
+    "item_id": 485,
+    "key_index": 9,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:07.203023+00:00",
+    "timestamp_unix": 1782224647,
+    "item_id": 682,
+    "key_index": 10,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:07.203023+00:00",
+    "timestamp_unix": 1782224647,
+    "item_id": 2,
+    "key_index": 10,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:07.203023+00:00",
+    "timestamp_unix": 1782224647,
+    "item_id": 485,
+    "key_index": 10,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:08.199226+00:00",
+    "timestamp_unix": 1782224648,
+    "item_id": 682,
+    "key_index": 11,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:08.199226+00:00",
+    "timestamp_unix": 1782224648,
+    "item_id": 2,
+    "key_index": 11,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:08.199226+00:00",
+    "timestamp_unix": 1782224648,
+    "item_id": 485,
+    "key_index": 11,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:09.394681+00:00",
+    "timestamp_unix": 1782224649,
+    "item_id": 682,
+    "key_index": 12,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:09.394681+00:00",
+    "timestamp_unix": 1782224649,
+    "item_id": 2,
+    "key_index": 12,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:09.394681+00:00",
+    "timestamp_unix": 1782224649,
+    "item_id": 485,
+    "key_index": 12,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:10.462407+00:00",
+    "timestamp_unix": 1782224650,
+    "item_id": 682,
+    "key_index": 13,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:10.462407+00:00",
+    "timestamp_unix": 1782224650,
+    "item_id": 2,
+    "key_index": 13,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:10.462407+00:00",
+    "timestamp_unix": 1782224650,
+    "item_id": 485,
+    "key_index": 13,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:11.691112+00:00",
+    "timestamp_unix": 1782224651,
+    "item_id": 682,
+    "key_index": 14,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:11.691112+00:00",
+    "timestamp_unix": 1782224651,
+    "item_id": 2,
+    "key_index": 14,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:11.691112+00:00",
+    "timestamp_unix": 1782224651,
+    "item_id": 485,
+    "key_index": 14,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:12.758361+00:00",
+    "timestamp_unix": 1782224652,
+    "item_id": 682,
+    "key_index": 15,
+    "on_market": false,
+    "cache_timestamp": null,
+    "cache_delay": null
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:12.758361+00:00",
+    "timestamp_unix": 1782224652,
+    "item_id": 2,
+    "key_index": 15,
+    "on_market": null,
+    "cache_timestamp": null,
+    "cache_delay": null
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:12.758361+00:00",
+    "timestamp_unix": 1782224652,
+    "item_id": 485,
+    "key_index": 15,
+    "on_market": null,
+    "cache_timestamp": null,
+    "cache_delay": null
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:13.724375+00:00",
+    "timestamp_unix": 1782224653,
+    "item_id": 682,
+    "key_index": 16,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:13.724375+00:00",
+    "timestamp_unix": 1782224653,
+    "item_id": 2,
+    "key_index": 16,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:13.724375+00:00",
+    "timestamp_unix": 1782224653,
+    "item_id": 485,
+    "key_index": 16,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:15.077669+00:00",
+    "timestamp_unix": 1782224655,
+    "item_id": 682,
+    "key_index": 17,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:15.077669+00:00",
+    "timestamp_unix": 1782224655,
+    "item_id": 2,
+    "key_index": 17,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:15.077669+00:00",
+    "timestamp_unix": 1782224655,
+    "item_id": 485,
+    "key_index": 17,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:16.297093+00:00",
+    "timestamp_unix": 1782224656,
+    "item_id": 682,
+    "key_index": 18,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:16.297093+00:00",
+    "timestamp_unix": 1782224656,
+    "item_id": 2,
+    "key_index": 18,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:16.297093+00:00",
+    "timestamp_unix": 1782224656,
+    "item_id": 485,
+    "key_index": 18,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:17.412743+00:00",
+    "timestamp_unix": 1782224657,
+    "item_id": 682,
+    "key_index": 19,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:17.412743+00:00",
+    "timestamp_unix": 1782224657,
+    "item_id": 2,
+    "key_index": 19,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:17.412743+00:00",
+    "timestamp_unix": 1782224657,
+    "item_id": 485,
+    "key_index": 19,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:18.659875+00:00",
+    "timestamp_unix": 1782224658,
+    "item_id": 682,
+    "key_index": 20,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:18.659875+00:00",
+    "timestamp_unix": 1782224658,
+    "item_id": 2,
+    "key_index": 20,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:18.659875+00:00",
+    "timestamp_unix": 1782224658,
+    "item_id": 485,
+    "key_index": 20,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:19.899104+00:00",
+    "timestamp_unix": 1782224659,
+    "item_id": 682,
+    "key_index": 21,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:19.899104+00:00",
+    "timestamp_unix": 1782224659,
+    "item_id": 2,
+    "key_index": 21,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:19.899104+00:00",
+    "timestamp_unix": 1782224659,
+    "item_id": 485,
+    "key_index": 21,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:21.168472+00:00",
+    "timestamp_unix": 1782224661,
+    "item_id": 682,
+    "key_index": 22,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:21.168472+00:00",
+    "timestamp_unix": 1782224661,
+    "item_id": 2,
+    "key_index": 22,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:21.168472+00:00",
+    "timestamp_unix": 1782224661,
+    "item_id": 485,
+    "key_index": 22,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:22.340887+00:00",
+    "timestamp_unix": 1782224662,
+    "item_id": 682,
+    "key_index": 23,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:22.340887+00:00",
+    "timestamp_unix": 1782224662,
+    "item_id": 2,
+    "key_index": 23,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:22.340887+00:00",
+    "timestamp_unix": 1782224662,
+    "item_id": 485,
+    "key_index": 23,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:23.569980+00:00",
+    "timestamp_unix": 1782224663,
+    "item_id": 682,
+    "key_index": 24,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:23.569980+00:00",
+    "timestamp_unix": 1782224663,
+    "item_id": 2,
+    "key_index": 24,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:23.569980+00:00",
+    "timestamp_unix": 1782224663,
+    "item_id": 485,
+    "key_index": 24,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:24.801594+00:00",
+    "timestamp_unix": 1782224664,
+    "item_id": 682,
+    "key_index": 25,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:24.801594+00:00",
+    "timestamp_unix": 1782224664,
+    "item_id": 2,
+    "key_index": 25,
+    "on_market": null,
+    "cache_timestamp": 1782224606,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:24.801594+00:00",
+    "timestamp_unix": 1782224664,
+    "item_id": 485,
+    "key_index": 25,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:26.129438+00:00",
+    "timestamp_unix": 1782224666,
+    "item_id": 682,
+    "key_index": 26,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:26.129438+00:00",
+    "timestamp_unix": 1782224666,
+    "item_id": 2,
+    "key_index": 26,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:26.129438+00:00",
+    "timestamp_unix": 1782224666,
+    "item_id": 485,
+    "key_index": 26,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:27.356627+00:00",
+    "timestamp_unix": 1782224667,
+    "item_id": 682,
+    "key_index": 27,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:27.356627+00:00",
+    "timestamp_unix": 1782224667,
+    "item_id": 2,
+    "key_index": 27,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:27.356627+00:00",
+    "timestamp_unix": 1782224667,
+    "item_id": 485,
+    "key_index": 27,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:28.689833+00:00",
+    "timestamp_unix": 1782224668,
+    "item_id": 682,
+    "key_index": 28,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:28.689833+00:00",
+    "timestamp_unix": 1782224668,
+    "item_id": 2,
+    "key_index": 28,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:28.689833+00:00",
+    "timestamp_unix": 1782224668,
+    "item_id": 485,
+    "key_index": 28,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:29.854827+00:00",
+    "timestamp_unix": 1782224669,
+    "item_id": 682,
+    "key_index": 29,
+    "on_market": false,
+    "cache_timestamp": 1782224611,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:29.854827+00:00",
+    "timestamp_unix": 1782224669,
+    "item_id": 2,
+    "key_index": 29,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:29.854827+00:00",
+    "timestamp_unix": 1782224669,
+    "item_id": 485,
+    "key_index": 29,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:31.243836+00:00",
+    "timestamp_unix": 1782224671,
+    "item_id": 682,
+    "key_index": 30,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:31.243836+00:00",
+    "timestamp_unix": 1782224671,
+    "item_id": 2,
+    "key_index": 30,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:31.243836+00:00",
+    "timestamp_unix": 1782224671,
+    "item_id": 485,
+    "key_index": 30,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:32.375863+00:00",
+    "timestamp_unix": 1782224672,
+    "item_id": 682,
+    "key_index": 31,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:32.375863+00:00",
+    "timestamp_unix": 1782224672,
+    "item_id": 2,
+    "key_index": 31,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:32.375863+00:00",
+    "timestamp_unix": 1782224672,
+    "item_id": 485,
+    "key_index": 31,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:33.400032+00:00",
+    "timestamp_unix": 1782224673,
+    "item_id": 682,
+    "key_index": 32,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:33.400032+00:00",
+    "timestamp_unix": 1782224673,
+    "item_id": 2,
+    "key_index": 32,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:33.400032+00:00",
+    "timestamp_unix": 1782224673,
+    "item_id": 485,
+    "key_index": 32,
+    "on_market": null,
+    "cache_timestamp": 1782224615,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:34.626777+00:00",
+    "timestamp_unix": 1782224674,
+    "item_id": 682,
+    "key_index": 33,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:34.626777+00:00",
+    "timestamp_unix": 1782224674,
+    "item_id": 2,
+    "key_index": 33,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:34.626777+00:00",
+    "timestamp_unix": 1782224674,
+    "item_id": 485,
+    "key_index": 33,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:35.857348+00:00",
+    "timestamp_unix": 1782224675,
+    "item_id": 682,
+    "key_index": 34,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:35.857348+00:00",
+    "timestamp_unix": 1782224675,
+    "item_id": 2,
+    "key_index": 34,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:35.857348+00:00",
+    "timestamp_unix": 1782224675,
+    "item_id": 485,
+    "key_index": 34,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:37.015310+00:00",
+    "timestamp_unix": 1782224677,
+    "item_id": 682,
+    "key_index": 35,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:37.015310+00:00",
+    "timestamp_unix": 1782224677,
+    "item_id": 2,
+    "key_index": 35,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:37.015310+00:00",
+    "timestamp_unix": 1782224677,
+    "item_id": 485,
+    "key_index": 35,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:38.214701+00:00",
+    "timestamp_unix": 1782224678,
+    "item_id": 682,
+    "key_index": 36,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:38.214701+00:00",
+    "timestamp_unix": 1782224678,
+    "item_id": 2,
+    "key_index": 36,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:38.214701+00:00",
+    "timestamp_unix": 1782224678,
+    "item_id": 485,
+    "key_index": 36,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:39.381297+00:00",
+    "timestamp_unix": 1782224679,
+    "item_id": 682,
+    "key_index": 37,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:39.381297+00:00",
+    "timestamp_unix": 1782224679,
+    "item_id": 2,
+    "key_index": 37,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:39.381297+00:00",
+    "timestamp_unix": 1782224679,
+    "item_id": 485,
+    "key_index": 37,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:40.361873+00:00",
+    "timestamp_unix": 1782224680,
+    "item_id": 682,
+    "key_index": 38,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:40.361873+00:00",
+    "timestamp_unix": 1782224680,
+    "item_id": 2,
+    "key_index": 38,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:40.361873+00:00",
+    "timestamp_unix": 1782224680,
+    "item_id": 485,
+    "key_index": 38,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:41.490037+00:00",
+    "timestamp_unix": 1782224681,
+    "item_id": 682,
+    "key_index": 39,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:41.490037+00:00",
+    "timestamp_unix": 1782224681,
+    "item_id": 2,
+    "key_index": 39,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:41.490037+00:00",
+    "timestamp_unix": 1782224681,
+    "item_id": 485,
+    "key_index": 39,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:42.621202+00:00",
+    "timestamp_unix": 1782224682,
+    "item_id": 682,
+    "key_index": 40,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:42.621202+00:00",
+    "timestamp_unix": 1782224682,
+    "item_id": 2,
+    "key_index": 40,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:42.621202+00:00",
+    "timestamp_unix": 1782224682,
+    "item_id": 485,
+    "key_index": 40,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:43.742536+00:00",
+    "timestamp_unix": 1782224683,
+    "item_id": 682,
+    "key_index": 41,
+    "on_market": false,
+    "cache_timestamp": null,
+    "cache_delay": null
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:43.742536+00:00",
+    "timestamp_unix": 1782224683,
+    "item_id": 2,
+    "key_index": 41,
+    "on_market": null,
+    "cache_timestamp": null,
+    "cache_delay": null
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:43.742536+00:00",
+    "timestamp_unix": 1782224683,
+    "item_id": 485,
+    "key_index": 41,
+    "on_market": null,
+    "cache_timestamp": null,
+    "cache_delay": null
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:44.765625+00:00",
+    "timestamp_unix": 1782224684,
+    "item_id": 682,
+    "key_index": 42,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:44.765625+00:00",
+    "timestamp_unix": 1782224684,
+    "item_id": 2,
+    "key_index": 42,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:44.765625+00:00",
+    "timestamp_unix": 1782224684,
+    "item_id": 485,
+    "key_index": 42,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:45.893284+00:00",
+    "timestamp_unix": 1782224685,
+    "item_id": 682,
+    "key_index": 43,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:45.893284+00:00",
+    "timestamp_unix": 1782224685,
+    "item_id": 2,
+    "key_index": 43,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:45.893284+00:00",
+    "timestamp_unix": 1782224685,
+    "item_id": 485,
+    "key_index": 43,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:46.919635+00:00",
+    "timestamp_unix": 1782224686,
+    "item_id": 682,
+    "key_index": 44,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:46.919635+00:00",
+    "timestamp_unix": 1782224686,
+    "item_id": 2,
+    "key_index": 44,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:46.919635+00:00",
+    "timestamp_unix": 1782224686,
+    "item_id": 485,
+    "key_index": 44,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:48.090271+00:00",
+    "timestamp_unix": 1782224688,
+    "item_id": 682,
+    "key_index": 45,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:48.090271+00:00",
+    "timestamp_unix": 1782224688,
+    "item_id": 2,
+    "key_index": 45,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:48.090271+00:00",
+    "timestamp_unix": 1782224688,
+    "item_id": 485,
+    "key_index": 45,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:49.274024+00:00",
+    "timestamp_unix": 1782224689,
+    "item_id": 682,
+    "key_index": 46,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:49.274024+00:00",
+    "timestamp_unix": 1782224689,
+    "item_id": 2,
+    "key_index": 46,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:49.274024+00:00",
+    "timestamp_unix": 1782224689,
+    "item_id": 485,
+    "key_index": 46,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:50.399397+00:00",
+    "timestamp_unix": 1782224690,
+    "item_id": 682,
+    "key_index": 47,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:50.399397+00:00",
+    "timestamp_unix": 1782224690,
+    "item_id": 2,
+    "key_index": 47,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:50.399397+00:00",
+    "timestamp_unix": 1782224690,
+    "item_id": 485,
+    "key_index": 47,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:51.949560+00:00",
+    "timestamp_unix": 1782224691,
+    "item_id": 682,
+    "key_index": 48,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:51.949560+00:00",
+    "timestamp_unix": 1782224691,
+    "item_id": 2,
+    "key_index": 48,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:51.949560+00:00",
+    "timestamp_unix": 1782224691,
+    "item_id": 485,
+    "key_index": 48,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:53.776880+00:00",
+    "timestamp_unix": 1782224693,
+    "item_id": 682,
+    "key_index": 49,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:53.776880+00:00",
+    "timestamp_unix": 1782224693,
+    "item_id": 2,
+    "key_index": 49,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:53.776880+00:00",
+    "timestamp_unix": 1782224693,
+    "item_id": 485,
+    "key_index": 49,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:54.941692+00:00",
+    "timestamp_unix": 1782224694,
+    "item_id": 682,
+    "key_index": 50,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:54.941692+00:00",
+    "timestamp_unix": 1782224694,
+    "item_id": 2,
+    "key_index": 50,
+    "on_market": null,
+    "cache_timestamp": 1782224636,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:54.941692+00:00",
+    "timestamp_unix": 1782224694,
+    "item_id": 485,
+    "key_index": 50,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:56.134390+00:00",
+    "timestamp_unix": 1782224696,
+    "item_id": 682,
+    "key_index": 51,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:56.134390+00:00",
+    "timestamp_unix": 1782224696,
+    "item_id": 2,
+    "key_index": 51,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:56.134390+00:00",
+    "timestamp_unix": 1782224696,
+    "item_id": 485,
+    "key_index": 51,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:57.393124+00:00",
+    "timestamp_unix": 1782224697,
+    "item_id": 682,
+    "key_index": 52,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:57.393124+00:00",
+    "timestamp_unix": 1782224697,
+    "item_id": 2,
+    "key_index": 52,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:57.393124+00:00",
+    "timestamp_unix": 1782224697,
+    "item_id": 485,
+    "key_index": 52,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:58.747329+00:00",
+    "timestamp_unix": 1782224698,
+    "item_id": 682,
+    "key_index": 53,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:58.747329+00:00",
+    "timestamp_unix": 1782224698,
+    "item_id": 2,
+    "key_index": 53,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:58.747329+00:00",
+    "timestamp_unix": 1782224698,
+    "item_id": 485,
+    "key_index": 53,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:59.821037+00:00",
+    "timestamp_unix": 1782224699,
+    "item_id": 682,
+    "key_index": 54,
+    "on_market": false,
+    "cache_timestamp": 1782224641,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:59.821037+00:00",
+    "timestamp_unix": 1782224699,
+    "item_id": 2,
+    "key_index": 54,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:24:59.821037+00:00",
+    "timestamp_unix": 1782224699,
+    "item_id": 485,
+    "key_index": 54,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:01.013445+00:00",
+    "timestamp_unix": 1782224701,
+    "item_id": 682,
+    "key_index": 55,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:01.013445+00:00",
+    "timestamp_unix": 1782224701,
+    "item_id": 2,
+    "key_index": 55,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:01.013445+00:00",
+    "timestamp_unix": 1782224701,
+    "item_id": 485,
+    "key_index": 55,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:02.276576+00:00",
+    "timestamp_unix": 1782224702,
+    "item_id": 682,
+    "key_index": 56,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:02.276576+00:00",
+    "timestamp_unix": 1782224702,
+    "item_id": 2,
+    "key_index": 56,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:02.276576+00:00",
+    "timestamp_unix": 1782224702,
+    "item_id": 485,
+    "key_index": 56,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:03.350931+00:00",
+    "timestamp_unix": 1782224703,
+    "item_id": 682,
+    "key_index": 57,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:03.350931+00:00",
+    "timestamp_unix": 1782224703,
+    "item_id": 2,
+    "key_index": 57,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:03.350931+00:00",
+    "timestamp_unix": 1782224703,
+    "item_id": 485,
+    "key_index": 57,
+    "on_market": null,
+    "cache_timestamp": 1782224645,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:04.549203+00:00",
+    "timestamp_unix": 1782224704,
+    "item_id": 682,
+    "key_index": 58,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:04.549203+00:00",
+    "timestamp_unix": 1782224704,
+    "item_id": 2,
+    "key_index": 58,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:04.549203+00:00",
+    "timestamp_unix": 1782224704,
+    "item_id": 485,
+    "key_index": 58,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:05.861426+00:00",
+    "timestamp_unix": 1782224705,
+    "item_id": 682,
+    "key_index": 59,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:05.861426+00:00",
+    "timestamp_unix": 1782224705,
+    "item_id": 2,
+    "key_index": 59,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:05.861426+00:00",
+    "timestamp_unix": 1782224705,
+    "item_id": 485,
+    "key_index": 59,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:07.090020+00:00",
+    "timestamp_unix": 1782224707,
+    "item_id": 682,
+    "key_index": 60,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:07.090020+00:00",
+    "timestamp_unix": 1782224707,
+    "item_id": 2,
+    "key_index": 60,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:07.090020+00:00",
+    "timestamp_unix": 1782224707,
+    "item_id": 485,
+    "key_index": 60,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:08.217972+00:00",
+    "timestamp_unix": 1782224708,
+    "item_id": 682,
+    "key_index": 61,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:08.217972+00:00",
+    "timestamp_unix": 1782224708,
+    "item_id": 2,
+    "key_index": 61,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:08.217972+00:00",
+    "timestamp_unix": 1782224708,
+    "item_id": 485,
+    "key_index": 61,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:09.393043+00:00",
+    "timestamp_unix": 1782224709,
+    "item_id": 682,
+    "key_index": 62,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:09.393043+00:00",
+    "timestamp_unix": 1782224709,
+    "item_id": 2,
+    "key_index": 62,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:09.393043+00:00",
+    "timestamp_unix": 1782224709,
+    "item_id": 485,
+    "key_index": 62,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:10.774163+00:00",
+    "timestamp_unix": 1782224710,
+    "item_id": 682,
+    "key_index": 63,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:10.774163+00:00",
+    "timestamp_unix": 1782224710,
+    "item_id": 2,
+    "key_index": 63,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:10.774163+00:00",
+    "timestamp_unix": 1782224710,
+    "item_id": 485,
+    "key_index": 63,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:12.210354+00:00",
+    "timestamp_unix": 1782224712,
+    "item_id": 682,
+    "key_index": 64,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:12.210354+00:00",
+    "timestamp_unix": 1782224712,
+    "item_id": 2,
+    "key_index": 64,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:12.210354+00:00",
+    "timestamp_unix": 1782224712,
+    "item_id": 485,
+    "key_index": 64,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:13.296077+00:00",
+    "timestamp_unix": 1782224713,
+    "item_id": 682,
+    "key_index": 65,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:13.296077+00:00",
+    "timestamp_unix": 1782224713,
+    "item_id": 2,
+    "key_index": 65,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:13.296077+00:00",
+    "timestamp_unix": 1782224713,
+    "item_id": 485,
+    "key_index": 65,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:14.463177+00:00",
+    "timestamp_unix": 1782224714,
+    "item_id": 682,
+    "key_index": 66,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:14.463177+00:00",
+    "timestamp_unix": 1782224714,
+    "item_id": 2,
+    "key_index": 66,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:14.463177+00:00",
+    "timestamp_unix": 1782224714,
+    "item_id": 485,
+    "key_index": 66,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:15.691785+00:00",
+    "timestamp_unix": 1782224715,
+    "item_id": 682,
+    "key_index": 67,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:15.691785+00:00",
+    "timestamp_unix": 1782224715,
+    "item_id": 2,
+    "key_index": 67,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:15.691785+00:00",
+    "timestamp_unix": 1782224715,
+    "item_id": 485,
+    "key_index": 67,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:16.867306+00:00",
+    "timestamp_unix": 1782224716,
+    "item_id": 682,
+    "key_index": 68,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:16.867306+00:00",
+    "timestamp_unix": 1782224716,
+    "item_id": 2,
+    "key_index": 68,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:16.867306+00:00",
+    "timestamp_unix": 1782224716,
+    "item_id": 485,
+    "key_index": 68,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:18.149896+00:00",
+    "timestamp_unix": 1782224718,
+    "item_id": 682,
+    "key_index": 69,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:18.149896+00:00",
+    "timestamp_unix": 1782224718,
+    "item_id": 2,
+    "key_index": 69,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:18.149896+00:00",
+    "timestamp_unix": 1782224718,
+    "item_id": 485,
+    "key_index": 69,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:19.276431+00:00",
+    "timestamp_unix": 1782224719,
+    "item_id": 682,
+    "key_index": 70,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:19.276431+00:00",
+    "timestamp_unix": 1782224719,
+    "item_id": 2,
+    "key_index": 70,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:19.276431+00:00",
+    "timestamp_unix": 1782224719,
+    "item_id": 485,
+    "key_index": 70,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:20.515817+00:00",
+    "timestamp_unix": 1782224720,
+    "item_id": 682,
+    "key_index": 71,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:20.515817+00:00",
+    "timestamp_unix": 1782224720,
+    "item_id": 2,
+    "key_index": 71,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:20.515817+00:00",
+    "timestamp_unix": 1782224720,
+    "item_id": 485,
+    "key_index": 71,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:21.835805+00:00",
+    "timestamp_unix": 1782224721,
+    "item_id": 682,
+    "key_index": 72,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:21.835805+00:00",
+    "timestamp_unix": 1782224721,
+    "item_id": 2,
+    "key_index": 72,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:21.835805+00:00",
+    "timestamp_unix": 1782224721,
+    "item_id": 485,
+    "key_index": 72,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:22.962537+00:00",
+    "timestamp_unix": 1782224722,
+    "item_id": 682,
+    "key_index": 73,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:22.962537+00:00",
+    "timestamp_unix": 1782224722,
+    "item_id": 2,
+    "key_index": 73,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:22.962537+00:00",
+    "timestamp_unix": 1782224722,
+    "item_id": 485,
+    "key_index": 73,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:24.089746+00:00",
+    "timestamp_unix": 1782224724,
+    "item_id": 682,
+    "key_index": 74,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:24.089746+00:00",
+    "timestamp_unix": 1782224724,
+    "item_id": 2,
+    "key_index": 74,
+    "on_market": null,
+    "cache_timestamp": 1782224666,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:24.089746+00:00",
+    "timestamp_unix": 1782224724,
+    "item_id": 485,
+    "key_index": 74,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:25.317884+00:00",
+    "timestamp_unix": 1782224725,
+    "item_id": 682,
+    "key_index": 75,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:25.317884+00:00",
+    "timestamp_unix": 1782224725,
+    "item_id": 2,
+    "key_index": 75,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:25.317884+00:00",
+    "timestamp_unix": 1782224725,
+    "item_id": 485,
+    "key_index": 75,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:26.751017+00:00",
+    "timestamp_unix": 1782224726,
+    "item_id": 682,
+    "key_index": 76,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:26.751017+00:00",
+    "timestamp_unix": 1782224726,
+    "item_id": 2,
+    "key_index": 76,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:26.751017+00:00",
+    "timestamp_unix": 1782224726,
+    "item_id": 485,
+    "key_index": 76,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:27.877137+00:00",
+    "timestamp_unix": 1782224727,
+    "item_id": 682,
+    "key_index": 77,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:27.877137+00:00",
+    "timestamp_unix": 1782224727,
+    "item_id": 2,
+    "key_index": 77,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:27.877137+00:00",
+    "timestamp_unix": 1782224727,
+    "item_id": 485,
+    "key_index": 77,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:29.106179+00:00",
+    "timestamp_unix": 1782224729,
+    "item_id": 682,
+    "key_index": 78,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:29.106179+00:00",
+    "timestamp_unix": 1782224729,
+    "item_id": 2,
+    "key_index": 78,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:29.106179+00:00",
+    "timestamp_unix": 1782224729,
+    "item_id": 485,
+    "key_index": 78,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:30.266916+00:00",
+    "timestamp_unix": 1782224730,
+    "item_id": 682,
+    "key_index": 79,
+    "on_market": false,
+    "cache_timestamp": 1782224671,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:30.266916+00:00",
+    "timestamp_unix": 1782224730,
+    "item_id": 2,
+    "key_index": 79,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:30.266916+00:00",
+    "timestamp_unix": 1782224730,
+    "item_id": 485,
+    "key_index": 79,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:31.475341+00:00",
+    "timestamp_unix": 1782224731,
+    "item_id": 682,
+    "key_index": 80,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:31.475341+00:00",
+    "timestamp_unix": 1782224731,
+    "item_id": 2,
+    "key_index": 80,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:31.475341+00:00",
+    "timestamp_unix": 1782224731,
+    "item_id": 485,
+    "key_index": 80,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:32.690228+00:00",
+    "timestamp_unix": 1782224732,
+    "item_id": 682,
+    "key_index": 81,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:32.690228+00:00",
+    "timestamp_unix": 1782224732,
+    "item_id": 2,
+    "key_index": 81,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:32.690228+00:00",
+    "timestamp_unix": 1782224732,
+    "item_id": 485,
+    "key_index": 81,
+    "on_market": null,
+    "cache_timestamp": 1782224675,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:33.863009+00:00",
+    "timestamp_unix": 1782224733,
+    "item_id": 682,
+    "key_index": 82,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:33.863009+00:00",
+    "timestamp_unix": 1782224733,
+    "item_id": 2,
+    "key_index": 82,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:33.863009+00:00",
+    "timestamp_unix": 1782224733,
+    "item_id": 485,
+    "key_index": 82,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:35.461569+00:00",
+    "timestamp_unix": 1782224735,
+    "item_id": 682,
+    "key_index": 83,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:35.461569+00:00",
+    "timestamp_unix": 1782224735,
+    "item_id": 2,
+    "key_index": 83,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:35.461569+00:00",
+    "timestamp_unix": 1782224735,
+    "item_id": 485,
+    "key_index": 83,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:36.535729+00:00",
+    "timestamp_unix": 1782224736,
+    "item_id": 682,
+    "key_index": 84,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:36.535729+00:00",
+    "timestamp_unix": 1782224736,
+    "item_id": 2,
+    "key_index": 84,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:36.535729+00:00",
+    "timestamp_unix": 1782224736,
+    "item_id": 485,
+    "key_index": 84,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:37.707413+00:00",
+    "timestamp_unix": 1782224737,
+    "item_id": 682,
+    "key_index": 85,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:37.707413+00:00",
+    "timestamp_unix": 1782224737,
+    "item_id": 2,
+    "key_index": 85,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:37.707413+00:00",
+    "timestamp_unix": 1782224737,
+    "item_id": 485,
+    "key_index": 85,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:38.834397+00:00",
+    "timestamp_unix": 1782224738,
+    "item_id": 682,
+    "key_index": 86,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:38.834397+00:00",
+    "timestamp_unix": 1782224738,
+    "item_id": 2,
+    "key_index": 86,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:38.834397+00:00",
+    "timestamp_unix": 1782224738,
+    "item_id": 485,
+    "key_index": 86,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:40.018278+00:00",
+    "timestamp_unix": 1782224740,
+    "item_id": 682,
+    "key_index": 87,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:40.018278+00:00",
+    "timestamp_unix": 1782224740,
+    "item_id": 2,
+    "key_index": 87,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:40.018278+00:00",
+    "timestamp_unix": 1782224740,
+    "item_id": 485,
+    "key_index": 87,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:41.189600+00:00",
+    "timestamp_unix": 1782224741,
+    "item_id": 682,
+    "key_index": 0,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:41.189600+00:00",
+    "timestamp_unix": 1782224741,
+    "item_id": 2,
+    "key_index": 0,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:41.189600+00:00",
+    "timestamp_unix": 1782224741,
+    "item_id": 485,
+    "key_index": 0,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:42.418557+00:00",
+    "timestamp_unix": 1782224742,
+    "item_id": 682,
+    "key_index": 1,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:42.418557+00:00",
+    "timestamp_unix": 1782224742,
+    "item_id": 2,
+    "key_index": 1,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:42.418557+00:00",
+    "timestamp_unix": 1782224742,
+    "item_id": 485,
+    "key_index": 1,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:43.544864+00:00",
+    "timestamp_unix": 1782224743,
+    "item_id": 682,
+    "key_index": 2,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:43.544864+00:00",
+    "timestamp_unix": 1782224743,
+    "item_id": 2,
+    "key_index": 2,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:43.544864+00:00",
+    "timestamp_unix": 1782224743,
+    "item_id": 485,
+    "key_index": 2,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:44.671652+00:00",
+    "timestamp_unix": 1782224744,
+    "item_id": 682,
+    "key_index": 3,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:44.671652+00:00",
+    "timestamp_unix": 1782224744,
+    "item_id": 2,
+    "key_index": 3,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:44.671652+00:00",
+    "timestamp_unix": 1782224744,
+    "item_id": 485,
+    "key_index": 3,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:45.797819+00:00",
+    "timestamp_unix": 1782224745,
+    "item_id": 682,
+    "key_index": 4,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:45.797819+00:00",
+    "timestamp_unix": 1782224745,
+    "item_id": 2,
+    "key_index": 4,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:45.797819+00:00",
+    "timestamp_unix": 1782224745,
+    "item_id": 485,
+    "key_index": 4,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:46.926728+00:00",
+    "timestamp_unix": 1782224746,
+    "item_id": 682,
+    "key_index": 5,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:46.926728+00:00",
+    "timestamp_unix": 1782224746,
+    "item_id": 2,
+    "key_index": 5,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:46.926728+00:00",
+    "timestamp_unix": 1782224746,
+    "item_id": 485,
+    "key_index": 5,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:48.050838+00:00",
+    "timestamp_unix": 1782224748,
+    "item_id": 682,
+    "key_index": 6,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:48.050838+00:00",
+    "timestamp_unix": 1782224748,
+    "item_id": 2,
+    "key_index": 6,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:48.050838+00:00",
+    "timestamp_unix": 1782224748,
+    "item_id": 485,
+    "key_index": 6,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:49.230648+00:00",
+    "timestamp_unix": 1782224749,
+    "item_id": 682,
+    "key_index": 7,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:49.230648+00:00",
+    "timestamp_unix": 1782224749,
+    "item_id": 2,
+    "key_index": 7,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:49.230648+00:00",
+    "timestamp_unix": 1782224749,
+    "item_id": 485,
+    "key_index": 7,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:50.405566+00:00",
+    "timestamp_unix": 1782224750,
+    "item_id": 682,
+    "key_index": 8,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:50.405566+00:00",
+    "timestamp_unix": 1782224750,
+    "item_id": 2,
+    "key_index": 8,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:50.405566+00:00",
+    "timestamp_unix": 1782224750,
+    "item_id": 485,
+    "key_index": 8,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:51.589501+00:00",
+    "timestamp_unix": 1782224751,
+    "item_id": 682,
+    "key_index": 9,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:51.589501+00:00",
+    "timestamp_unix": 1782224751,
+    "item_id": 2,
+    "key_index": 9,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:51.589501+00:00",
+    "timestamp_unix": 1782224751,
+    "item_id": 485,
+    "key_index": 9,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:52.760969+00:00",
+    "timestamp_unix": 1782224752,
+    "item_id": 682,
+    "key_index": 10,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:52.760969+00:00",
+    "timestamp_unix": 1782224752,
+    "item_id": 2,
+    "key_index": 10,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:52.760969+00:00",
+    "timestamp_unix": 1782224752,
+    "item_id": 485,
+    "key_index": 10,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:53.922725+00:00",
+    "timestamp_unix": 1782224753,
+    "item_id": 682,
+    "key_index": 11,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:53.922725+00:00",
+    "timestamp_unix": 1782224753,
+    "item_id": 2,
+    "key_index": 11,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:53.922725+00:00",
+    "timestamp_unix": 1782224753,
+    "item_id": 485,
+    "key_index": 11,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:55.118759+00:00",
+    "timestamp_unix": 1782224755,
+    "item_id": 682,
+    "key_index": 12,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:55.118759+00:00",
+    "timestamp_unix": 1782224755,
+    "item_id": 2,
+    "key_index": 12,
+    "on_market": null,
+    "cache_timestamp": 1782224696,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:55.118759+00:00",
+    "timestamp_unix": 1782224755,
+    "item_id": 485,
+    "key_index": 12,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:56.204893+00:00",
+    "timestamp_unix": 1782224756,
+    "item_id": 682,
+    "key_index": 13,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:56.204893+00:00",
+    "timestamp_unix": 1782224756,
+    "item_id": 2,
+    "key_index": 13,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:56.204893+00:00",
+    "timestamp_unix": 1782224756,
+    "item_id": 485,
+    "key_index": 13,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:57.215960+00:00",
+    "timestamp_unix": 1782224757,
+    "item_id": 682,
+    "key_index": 14,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:57.215960+00:00",
+    "timestamp_unix": 1782224757,
+    "item_id": 2,
+    "key_index": 14,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:57.215960+00:00",
+    "timestamp_unix": 1782224757,
+    "item_id": 485,
+    "key_index": 14,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:58.498135+00:00",
+    "timestamp_unix": 1782224758,
+    "item_id": 682,
+    "key_index": 15,
+    "on_market": false,
+    "cache_timestamp": null,
+    "cache_delay": null
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:58.498135+00:00",
+    "timestamp_unix": 1782224758,
+    "item_id": 2,
+    "key_index": 15,
+    "on_market": null,
+    "cache_timestamp": null,
+    "cache_delay": null
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:58.498135+00:00",
+    "timestamp_unix": 1782224758,
+    "item_id": 485,
+    "key_index": 15,
+    "on_market": null,
+    "cache_timestamp": null,
+    "cache_delay": null
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:59.336344+00:00",
+    "timestamp_unix": 1782224759,
+    "item_id": 682,
+    "key_index": 16,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:59.336344+00:00",
+    "timestamp_unix": 1782224759,
+    "item_id": 2,
+    "key_index": 16,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:25:59.336344+00:00",
+    "timestamp_unix": 1782224759,
+    "item_id": 485,
+    "key_index": 16,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:00.645891+00:00",
+    "timestamp_unix": 1782224760,
+    "item_id": 682,
+    "key_index": 17,
+    "on_market": false,
+    "cache_timestamp": 1782224701,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:00.645891+00:00",
+    "timestamp_unix": 1782224760,
+    "item_id": 2,
+    "key_index": 17,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:00.645891+00:00",
+    "timestamp_unix": 1782224760,
+    "item_id": 485,
+    "key_index": 17,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:01.877201+00:00",
+    "timestamp_unix": 1782224761,
+    "item_id": 682,
+    "key_index": 18,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:01.877201+00:00",
+    "timestamp_unix": 1782224761,
+    "item_id": 2,
+    "key_index": 18,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:01.877201+00:00",
+    "timestamp_unix": 1782224761,
+    "item_id": 485,
+    "key_index": 18,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:03.000915+00:00",
+    "timestamp_unix": 1782224763,
+    "item_id": 682,
+    "key_index": 19,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:03.000915+00:00",
+    "timestamp_unix": 1782224763,
+    "item_id": 2,
+    "key_index": 19,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:03.000915+00:00",
+    "timestamp_unix": 1782224763,
+    "item_id": 485,
+    "key_index": 19,
+    "on_market": null,
+    "cache_timestamp": 1782224705,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:04.229767+00:00",
+    "timestamp_unix": 1782224764,
+    "item_id": 682,
+    "key_index": 20,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:04.229767+00:00",
+    "timestamp_unix": 1782224764,
+    "item_id": 2,
+    "key_index": 20,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:04.229767+00:00",
+    "timestamp_unix": 1782224764,
+    "item_id": 485,
+    "key_index": 20,
+    "on_market": null,
+    "cache_timestamp": 1782224735,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:05.458898+00:00",
+    "timestamp_unix": 1782224765,
+    "item_id": 682,
+    "key_index": 21,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:05.458898+00:00",
+    "timestamp_unix": 1782224765,
+    "item_id": 2,
+    "key_index": 21,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:05.458898+00:00",
+    "timestamp_unix": 1782224765,
+    "item_id": 485,
+    "key_index": 21,
+    "on_market": null,
+    "cache_timestamp": 1782224735,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:06.794594+00:00",
+    "timestamp_unix": 1782224766,
+    "item_id": 682,
+    "key_index": 22,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:06.794594+00:00",
+    "timestamp_unix": 1782224766,
+    "item_id": 2,
+    "key_index": 22,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:06.794594+00:00",
+    "timestamp_unix": 1782224766,
+    "item_id": 485,
+    "key_index": 22,
+    "on_market": null,
+    "cache_timestamp": 1782224735,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:08.029866+00:00",
+    "timestamp_unix": 1782224768,
+    "item_id": 682,
+    "key_index": 23,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:08.029866+00:00",
+    "timestamp_unix": 1782224768,
+    "item_id": 2,
+    "key_index": 23,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:08.029866+00:00",
+    "timestamp_unix": 1782224768,
+    "item_id": 485,
+    "key_index": 23,
+    "on_market": null,
+    "cache_timestamp": 1782224735,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:09.215160+00:00",
+    "timestamp_unix": 1782224769,
+    "item_id": 682,
+    "key_index": 24,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:09.215160+00:00",
+    "timestamp_unix": 1782224769,
+    "item_id": 2,
+    "key_index": 24,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:09.215160+00:00",
+    "timestamp_unix": 1782224769,
+    "item_id": 485,
+    "key_index": 24,
+    "on_market": null,
+    "cache_timestamp": 1782224735,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:10.434251+00:00",
+    "timestamp_unix": 1782224770,
+    "item_id": 682,
+    "key_index": 25,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:10.434251+00:00",
+    "timestamp_unix": 1782224770,
+    "item_id": 2,
+    "key_index": 25,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:10.434251+00:00",
+    "timestamp_unix": 1782224770,
+    "item_id": 485,
+    "key_index": 25,
+    "on_market": null,
+    "cache_timestamp": 1782224735,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:11.706716+00:00",
+    "timestamp_unix": 1782224771,
+    "item_id": 682,
+    "key_index": 26,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:11.706716+00:00",
+    "timestamp_unix": 1782224771,
+    "item_id": 2,
+    "key_index": 26,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:11.706716+00:00",
+    "timestamp_unix": 1782224771,
+    "item_id": 485,
+    "key_index": 26,
+    "on_market": null,
+    "cache_timestamp": 1782224735,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:12.938014+00:00",
+    "timestamp_unix": 1782224772,
+    "item_id": 682,
+    "key_index": 27,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:12.938014+00:00",
+    "timestamp_unix": 1782224772,
+    "item_id": 2,
+    "key_index": 27,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:12.938014+00:00",
+    "timestamp_unix": 1782224772,
+    "item_id": 485,
+    "key_index": 27,
+    "on_market": null,
+    "cache_timestamp": 1782224735,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:14.060272+00:00",
+    "timestamp_unix": 1782224774,
+    "item_id": 682,
+    "key_index": 28,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:14.060272+00:00",
+    "timestamp_unix": 1782224774,
+    "item_id": 2,
+    "key_index": 28,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:14.060272+00:00",
+    "timestamp_unix": 1782224774,
+    "item_id": 485,
+    "key_index": 28,
+    "on_market": null,
+    "cache_timestamp": 1782224735,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:15.288026+00:00",
+    "timestamp_unix": 1782224775,
+    "item_id": 682,
+    "key_index": 29,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:15.288026+00:00",
+    "timestamp_unix": 1782224775,
+    "item_id": 2,
+    "key_index": 29,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:15.288026+00:00",
+    "timestamp_unix": 1782224775,
+    "item_id": 485,
+    "key_index": 29,
+    "on_market": null,
+    "cache_timestamp": 1782224735,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:16.404575+00:00",
+    "timestamp_unix": 1782224776,
+    "item_id": 682,
+    "key_index": 30,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:16.404575+00:00",
+    "timestamp_unix": 1782224776,
+    "item_id": 2,
+    "key_index": 30,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:16.404575+00:00",
+    "timestamp_unix": 1782224776,
+    "item_id": 485,
+    "key_index": 30,
+    "on_market": null,
+    "cache_timestamp": 1782224735,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:17.542868+00:00",
+    "timestamp_unix": 1782224777,
+    "item_id": 682,
+    "key_index": 31,
+    "on_market": false,
+    "cache_timestamp": 1782224731,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:17.542868+00:00",
+    "timestamp_unix": 1782224777,
+    "item_id": 2,
+    "key_index": 31,
+    "on_market": null,
+    "cache_timestamp": 1782224726,
+    "cache_delay": 30
+  },
+  {
+    "timestamp_utc": "2026-06-23T14:26:17.542868+00:00",
+    "timestamp_unix": 1782224777,
+    "item_id": 485,
+    "key_index": 31,
+    "on_market": null,
+    "cache_timestamp": 1782224735,
+    "cache_delay": 30
+  }
+]

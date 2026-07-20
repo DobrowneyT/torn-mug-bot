@@ -1,0 +1,613 @@
+//torn calls
+20:12:40 - 22/06/26 You listed a pair of EOD Pants (Impassable) on the item market for $20,000,000,000
+20:13:40 - 22/06/26 You removed a pair of EOD Pants (Impassable) from the item market
+20:14:01 - 22/06/26 You listed a pair of EOD Pants (Impassable) on the item market for $20,000,000,000
+20:14:10 - 22/06/26 You removed a pair of EOD Pants (Impassable) from the item market
+20:16:13 - 22/06/26 You listed a pair of EOD Pants (Impassable) on the item market for $20,000,000,000
+20:16:50 - 22/06/26 You removed a pair of EOD Pants (Impassable) from the item market
+20:17:00 - 22/06/26 You listed a pair of EOD Pants (Impassable) on the item market for $20,000,000,000
+20:17:10 - 22/06/26 You removed a pair of EOD Pants (Impassable) from the item market
+20:17:50 - 22/06/26 You listed a pair of EOD Pants (Impassable) on the item market for $20,000,000,000
+
+[
+  {
+    "timestamp_utc": "2026-06-22T20:16:11.474995+00:00",
+    "timestamp_unix": 1782159371,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:12.475197+00:00",
+    "timestamp_unix": 1782159372,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:13.475111+00:00",
+    "timestamp_unix": 1782159373,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:14.475101+00:00",
+    "timestamp_unix": 1782159374,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:15.475179+00:00",
+    "timestamp_unix": 1782159375,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:16.475243+00:00",
+    "timestamp_unix": 1782159376,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:17.475260+00:00",
+    "timestamp_unix": 1782159377,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:18.475222+00:00",
+    "timestamp_unix": 1782159378,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:19.475226+00:00",
+    "timestamp_unix": 1782159379,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:20.475125+00:00",
+    "timestamp_unix": 1782159380,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:21.475178+00:00",
+    "timestamp_unix": 1782159381,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:22.475099+00:00",
+    "timestamp_unix": 1782159382,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:23.475113+00:00",
+    "timestamp_unix": 1782159383,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:24.475212+00:00",
+    "timestamp_unix": 1782159384,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:25.475164+00:00",
+    "timestamp_unix": 1782159385,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:26.475111+00:00",
+    "timestamp_unix": 1782159386,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:27.475119+00:00",
+    "timestamp_unix": 1782159387,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:28.475133+00:00",
+    "timestamp_unix": 1782159388,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:29.475122+00:00",
+    "timestamp_unix": 1782159389,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:30.475214+00:00",
+    "timestamp_unix": 1782159390,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:31.475186+00:00",
+    "timestamp_unix": 1782159391,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:32.475118+00:00",
+    "timestamp_unix": 1782159392,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:33.475113+00:00",
+    "timestamp_unix": 1782159393,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:34.475219+00:00",
+    "timestamp_unix": 1782159394,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:35.475193+00:00",
+    "timestamp_unix": 1782159395,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:36.475074+00:00",
+    "timestamp_unix": 1782159396,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:37.475190+00:00",
+    "timestamp_unix": 1782159397,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:38.475119+00:00",
+    "timestamp_unix": 1782159398,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:39.475077+00:00",
+    "timestamp_unix": 1782159399,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:40.475116+00:00",
+    "timestamp_unix": 1782159400,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:41.475112+00:00",
+    "timestamp_unix": 1782159401,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:42.475115+00:00",
+    "timestamp_unix": 1782159402,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:43.475123+00:00",
+    "timestamp_unix": 1782159403,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:44.475113+00:00",
+    "timestamp_unix": 1782159404,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:45.475116+00:00",
+    "timestamp_unix": 1782159405,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:46.475118+00:00",
+    "timestamp_unix": 1782159406,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:47.475158+00:00",
+    "timestamp_unix": 1782159407,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:48.475169+00:00",
+    "timestamp_unix": 1782159408,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:49.475107+00:00",
+    "timestamp_unix": 1782159409,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:50.475229+00:00",
+    "timestamp_unix": 1782159410,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:51.475176+00:00",
+    "timestamp_unix": 1782159411,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:52.475110+00:00",
+    "timestamp_unix": 1782159412,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:53.475095+00:00",
+    "timestamp_unix": 1782159413,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:54.475187+00:00",
+    "timestamp_unix": 1782159414,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:55.475103+00:00",
+    "timestamp_unix": 1782159415,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:56.475078+00:00",
+    "timestamp_unix": 1782159416,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:57.475127+00:00",
+    "timestamp_unix": 1782159417,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:58.475223+00:00",
+    "timestamp_unix": 1782159418,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:16:59.475181+00:00",
+    "timestamp_unix": 1782159419,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:00.475223+00:00",
+    "timestamp_unix": 1782159420,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:01.475124+00:00",
+    "timestamp_unix": 1782159421,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:02.475111+00:00",
+    "timestamp_unix": 1782159422,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:03.475115+00:00",
+    "timestamp_unix": 1782159423,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:04.475113+00:00",
+    "timestamp_unix": 1782159424,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:05.475119+00:00",
+    "timestamp_unix": 1782159425,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:06.475109+00:00",
+    "timestamp_unix": 1782159426,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:07.475111+00:00",
+    "timestamp_unix": 1782159427,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:08.475106+00:00",
+    "timestamp_unix": 1782159428,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:09.475104+00:00",
+    "timestamp_unix": 1782159429,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:10.475114+00:00",
+    "timestamp_unix": 1782159430,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:11.475118+00:00",
+    "timestamp_unix": 1782159431,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:12.475105+00:00",
+    "timestamp_unix": 1782159432,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:13.475211+00:00",
+    "timestamp_unix": 1782159433,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:14.475174+00:00",
+    "timestamp_unix": 1782159434,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:15.475209+00:00",
+    "timestamp_unix": 1782159435,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:16.475255+00:00",
+    "timestamp_unix": 1782159436,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:17.475099+00:00",
+    "timestamp_unix": 1782159437,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:18.475088+00:00",
+    "timestamp_unix": 1782159438,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:19.475102+00:00",
+    "timestamp_unix": 1782159439,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:20.475101+00:00",
+    "timestamp_unix": 1782159440,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:21.475076+00:00",
+    "timestamp_unix": 1782159441,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:22.475114+00:00",
+    "timestamp_unix": 1782159442,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:23.475099+00:00",
+    "timestamp_unix": 1782159443,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:24.475118+00:00",
+    "timestamp_unix": 1782159444,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:25.475111+00:00",
+    "timestamp_unix": 1782159445,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:26.475071+00:00",
+    "timestamp_unix": 1782159446,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:27.475112+00:00",
+    "timestamp_unix": 1782159447,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:28.475114+00:00",
+    "timestamp_unix": 1782159448,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:29.475095+00:00",
+    "timestamp_unix": 1782159449,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:30.475105+00:00",
+    "timestamp_unix": 1782159450,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:31.475143+00:00",
+    "timestamp_unix": 1782159451,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:32.475123+00:00",
+    "timestamp_unix": 1782159452,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:33.475160+00:00",
+    "timestamp_unix": 1782159453,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:34.475104+00:00",
+    "timestamp_unix": 1782159454,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:35.475095+00:00",
+    "timestamp_unix": 1782159455,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:36.475099+00:00",
+    "timestamp_unix": 1782159456,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:37.475100+00:00",
+    "timestamp_unix": 1782159457,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:38.475117+00:00",
+    "timestamp_unix": 1782159458,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:39.475101+00:00",
+    "timestamp_unix": 1782159459,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:40.475100+00:00",
+    "timestamp_unix": 1782159460,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:41.475074+00:00",
+    "timestamp_unix": 1782159461,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:42.475172+00:00",
+    "timestamp_unix": 1782159462,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:43.475114+00:00",
+    "timestamp_unix": 1782159463,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:44.475201+00:00",
+    "timestamp_unix": 1782159464,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:45.475104+00:00",
+    "timestamp_unix": 1782159465,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:46.475102+00:00",
+    "timestamp_unix": 1782159466,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:47.475115+00:00",
+    "timestamp_unix": 1782159467,
+    "on_market": true
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:48.475116+00:00",
+    "timestamp_unix": 1782159468,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:49.475122+00:00",
+    "timestamp_unix": 1782159469,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:50.475115+00:00",
+    "timestamp_unix": 1782159470,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:51.475111+00:00",
+    "timestamp_unix": 1782159471,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:52.475111+00:00",
+    "timestamp_unix": 1782159472,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:53.475115+00:00",
+    "timestamp_unix": 1782159473,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:54.475108+00:00",
+    "timestamp_unix": 1782159474,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:55.475097+00:00",
+    "timestamp_unix": 1782159475,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:56.475108+00:00",
+    "timestamp_unix": 1782159476,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:57.475173+00:00",
+    "timestamp_unix": 1782159477,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:58.475212+00:00",
+    "timestamp_unix": 1782159478,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:17:59.475106+00:00",
+    "timestamp_unix": 1782159479,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:18:00.475116+00:00",
+    "timestamp_unix": 1782159480,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:18:01.475112+00:00",
+    "timestamp_unix": 1782159481,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:18:02.475107+00:00",
+    "timestamp_unix": 1782159482,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:18:03.475106+00:00",
+    "timestamp_unix": 1782159483,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:18:04.475125+00:00",
+    "timestamp_unix": 1782159484,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:18:05.475117+00:00",
+    "timestamp_unix": 1782159485,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:18:06.475121+00:00",
+    "timestamp_unix": 1782159486,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:18:07.475124+00:00",
+    "timestamp_unix": 1782159487,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:18:08.475111+00:00",
+    "timestamp_unix": 1782159488,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:18:09.475113+00:00",
+    "timestamp_unix": 1782159489,
+    "on_market": false
+  },
+  {
+    "timestamp_utc": "2026-06-22T20:18:10.475217+00:00",
+    "timestamp_unix": 1782159490,
+    "on_market": false
+  }
+]

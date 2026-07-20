@@ -1,0 +1,12 @@
+.env
+.venv/
+build/
+__pycache__/
+*.pyc
+*.db
+*.db-journal
+bot/state.json
+bot/state.json.*
+scratch/dumps/
+# userscripts/ ARE tracked here, with the market-tracker wsToken scrubbed to a
+# placeholder. Paste your own token locally and DON'T commit it.

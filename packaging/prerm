@@ -1,0 +1,8 @@
+#!/bin/bash
+# Stop + disable the service before the package is removed.
+set -e
+if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
+    systemctl stop mug-bot.service 2>/dev/null || true
+    systemctl disable mug-bot.service 2>/dev/null || true
+fi
+exit 0
