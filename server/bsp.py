@@ -12,7 +12,7 @@ import config
 
 log = logging.getLogger("mug.bsp")
 
-BSP_URL = "http://www.lol-manager.com/api/battlestats/{key}/{user_id}/TornForge"
+BSP_URL = "https://www.lol-manager.com/api/battlestats/{key}/{user_id}/TornForge"
 
 
 async def get_tbs(client: httpx.AsyncClient, user_id: int) -> Optional[Dict]:
@@ -21,7 +21,7 @@ async def get_tbs(client: httpx.AsyncClient, user_id: int) -> Optional[Dict]:
         return None
     url = BSP_URL.format(key=config.BSP_API_KEY, user_id=user_id)
     try:
-        resp = await client.get(url, timeout=15)
+        resp = await client.get(url, timeout=15, follow_redirects=True)
         data = resp.json()
     except (httpx.HTTPError, ValueError) as e:
         log.warning("BSP fetch failed for %s: %s", user_id, e)
