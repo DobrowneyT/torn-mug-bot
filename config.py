@@ -29,9 +29,11 @@ ITEMS_ROLE_ID = int(os.environ.get("MUG_ITEMS_ROLE_ID", "0") or 0)
 # ---- Server ----
 SERVER_HOST = os.environ.get("MUG_SERVER_HOST", "0.0.0.0")
 SERVER_PORT = int(os.environ.get("MUG_SERVER_PORT", "3001"))
-# Data lives OUTSIDE the install dir so package upgrades/reinstalls never touch it. db.init_db
-# falls back to a local file if this dir isn't writable (e.g. local dev without the package).
+# Data lives OUTSIDE the checkout so a deploy, a re-clone or `git clean` can never touch it.
 DB_PATH = os.environ.get("MUG_DB_PATH") or "/var/lib/mug-bot/mug_bot.db"
+# LOCAL DEV ONLY. db._resolve_db_path falls back here when DB_PATH's directory isn't writable, and
+# logs a warning saying so — on a server that means the database is sitting in the git working tree,
+# which is a data-loss risk, not a convenience. Set MUG_DB_PATH there.
 DB_PATH_FALLBACK = os.path.join(os.path.dirname(__file__), "mug_bot.db")
 
 # ---- Torn / enrichment API keys ----

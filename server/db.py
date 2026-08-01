@@ -11,6 +11,7 @@ end — see ``batch()`` for why that matters.
 """
 
 import json
+import logging
 import os
 import time
 from contextlib import asynccontextmanager
@@ -19,6 +20,8 @@ from typing import Any, Dict, List, Optional
 import aiosqlite
 
 import config
+
+log = logging.getLogger("mug.db")
 
 SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
 
@@ -90,9 +93,27 @@ async def batch():
             await _db.commit()
 
 
+def _within_git_checkout(path: str) -> bool:
+    """True if `path` sits at or below a directory containing .git — i.e. inside a working tree."""
+    d = os.path.abspath(os.path.dirname(path))
+    while True:
+        if os.path.isdir(os.path.join(d, ".git")):
+            return True
+        parent = os.path.dirname(d)
+        if parent == d:
+            return False
+        d = parent
+
+
 def _resolve_db_path() -> str:
-    """Use config.DB_PATH (/var/lib/mug-bot) when its dir is writable; otherwise fall back to a
-    local file (local dev without the package installed)."""
+    """Use config.DB_PATH (/var/lib/mug-bot) when its dir is writable; otherwise fall back to a file
+    beside the code — which is fine for local dev and dangerous on a server.
+
+    The fallback used to be SILENT, which is how production ended up running with its database inside
+    the git checkout: a re-clone, a bad reset or `git clean -xfd` would have destroyed every capture,
+    seller mapping and API key. It stays a warning rather than a hard failure so that a box already in
+    that state keeps running (and can be migrated deliberately) instead of failing to boot.
+    """
     path = config.DB_PATH
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -100,8 +121,19 @@ def _resolve_db_path() -> str:
             return path
     except OSError:
         pass
-    os.makedirs(os.path.dirname(config.DB_PATH_FALLBACK), exist_ok=True)
-    return config.DB_PATH_FALLBACK
+
+    fallback = config.DB_PATH_FALLBACK
+    os.makedirs(os.path.dirname(fallback), exist_ok=True)
+    detail = ""
+    if _within_git_checkout(fallback):
+        detail = (" That path is inside a GIT CHECKOUT — `git clean`, a re-clone or a bad reset will"
+                  " DESTROY it. Expected for local dev; on a server, fix this.")
+    log.warning(
+        "database directory %s is not writable — falling back to %s.%s Set MUG_DB_PATH in .env to "
+        "choose the location explicitly.",
+        os.path.dirname(path), fallback, detail,
+    )
+    return fallback
 
 
 def db_path() -> str:
