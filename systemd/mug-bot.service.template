@@ -1,0 +1,25 @@
+# Mug Bot systemd unit TEMPLATE. Do not install this file directly — deploy/provision.sh
+# substitutes @RUN_USER@ / @WORKING_DIR@ from the real box and writes the result to
+# /etc/systemd/system/mug-bot.service.
+#
+# It is generated rather than copied because the previous hand-written unit drifted: it still named
+# a user and paths from a decommissioned server long after the bot had moved.
+#
+# Inbound TCP 3001 must be open for the userscripts' GM.xmlHttpRequest POSTs:
+#   sudo ufw allow 3001/tcp
+
+[Unit]
+Description=Mug Bot (Torn item-market monitor + Discord alerts)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@RUN_USER@
+WorkingDirectory=@WORKING_DIR@
+ExecStart=@WORKING_DIR@/.venv/bin/python main.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

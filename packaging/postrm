@@ -1,9 +1,0 @@
-#!/bin/bash
-# Reload systemd after removal; on purge, drop the venv (keep .env + the SQLite DB so a
-# reinstall keeps your config and history — delete them by hand if you really want a clean slate).
-set -e
-systemctl daemon-reload 2>/dev/null || true
-if [ "$1" = "purge" ]; then
-    rm -rf /home/monchoon/torn/mug-bot/.venv
-fi
-exit 0
