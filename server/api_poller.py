@@ -182,27 +182,38 @@ async def poll_item(bot, client: httpx.AsyncClient, item_id, is_gear, category=N
         return cache_ts
     if is_gear is None:
         is_gear = _detect_is_gear(item_meta, listings)
-    await db.watchlist_mark_polled(
-        item_id, len(listings), is_gear=is_gear, category=(item_meta or {}).get("type")
-    )
-    label = (item_meta or {}).get("name")
-    if label:
-        await db.watchlist_ensure(item_id, label, is_gear=is_gear)
 
-    if is_gear:
-        current = {}
-        for entry in listings:
-            det = entry.get("item_details") or {}
-            uid = det.get("uid")
-            if uid is None:
-                continue
-            current[str(uid)] = {"price": entry.get("price"), "stats": det.get("stats")}
-        await reconcile_gear(bot, item_id, current, label, complete=complete)
-    else:
-        current = [{"price": e.get("price"), "amount": e.get("amount")} for e in listings]
-        await reconcile_items(bot, item_id, current, complete=complete, item_label=label)
+    # One transaction for this item's whole poll. Reconciling a gear item writes a row per listing
+    # (plus the watchlist bookkeeping); committing each of those separately meant an fsync per
+    # listing on the single aiosqlite worker thread, stalling every other item's poll and the alert
+    # path behind it. See db.batch().
+    label = (item_meta or {}).get("name")
+    item_current = None
+    async with db.batch():
+        await db.watchlist_mark_polled(
+            item_id, len(listings), is_gear=is_gear, category=(item_meta or {}).get("type")
+        )
+        if label:
+            await db.watchlist_ensure(item_id, label, is_gear=is_gear)
+
+        if is_gear:
+            current = {}
+            for entry in listings:
+                det = entry.get("item_details") or {}
+                uid = det.get("uid")
+                if uid is None:
+                    continue
+                current[str(uid)] = {"price": entry.get("price"), "stats": det.get("stats")}
+            await reconcile_gear(bot, item_id, current, label, complete=complete)
+        else:
+            item_current = [{"price": e.get("price"), "amount": e.get("amount")} for e in listings]
+            await reconcile_items(bot, item_id, item_current, complete=complete, item_label=label)
+
+    # Deliberately OUTSIDE the batch: this posts to Discord, and an HTTP round trip must never be
+    # made with a write transaction held open on the single shared connection.
+    if item_current is not None:
         await deal_finder.check_item_deals(
-            bot, item_id, current, item_name=label, category=(item_meta or {}).get("type")
+            bot, item_id, item_current, item_name=label, category=(item_meta or {}).get("type")
         )
     return cache_ts
 

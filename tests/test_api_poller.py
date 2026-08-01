@@ -82,6 +82,91 @@ def test_incomplete_fetch_does_not_fire_phantom_sales(tmp_path, monkeypatch):
     asyncio.run(scenario())
 
 
+def test_poll_writes_are_batched_into_one_transaction(tmp_path, monkeypatch):
+    """Every commit is an fsync on the single aiosqlite worker thread, so a commit-per-listing
+    reconcile stalls every other item's poll and the alert path behind it. One poll of an item must
+    cost a constant number of commits, not one per listing."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "batch.db"))
+    listing_count = 50
+
+    async def scenario():
+        await db.init_db()
+
+        # A full page of gear listings, none of them attributable (all land in unmatched_gear —
+        # the write-heaviest path, one row per listing).
+        listings = [
+            {"price": 1_000_000 + i,
+             "item_details": {"uid": str(90_000 + i), "stats": {"damage": 60.0, "accuracy": 50.0}}}
+            for i in range(listing_count)
+        ]
+
+        async def fake_fetch(client, item_id, bonus, max_pages):
+            return ({"name": "ArmaLite M-15A4", "type": "Primary"}, listings, True, 1234567890)
+
+        monkeypatch.setattr(api_poller, "_fetch_pages", fake_fetch)
+
+        commits = []
+        real_commit = db._db.commit
+
+        async def counting_commit():
+            commits.append(1)
+            await real_commit()
+
+        try:
+            db._db.commit = counting_commit
+            await api_poller.poll_item(None, None, 399, True)
+            db._db.commit = real_commit
+            # The whole poll — watchlist bookkeeping + 50 unmatched rows + the prune — is one commit.
+            assert len(commits) == 1, f"{listing_count} listings cost {len(commits)} commits"
+            # ...and the rows are there, i.e. we batched the writes rather than dropping them.
+            assert await db.unmatched_count() == listing_count
+        finally:
+            db._db.commit = real_commit
+            await db.close_db()   # a leaked connection thread would hang the whole suite
+
+    asyncio.run(scenario())
+
+
+def test_batch_commits_once_and_survives_an_error(tmp_path, monkeypatch):
+    """db.batch() nests (only the outermost commits) and still commits on the way out of an
+    exception — matching the pre-batching behaviour where each helper committed as it went."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "batchctx.db"))
+
+    async def scenario():
+        await db.init_db()
+        commits = []
+        real_commit = db._db.commit
+
+        async def counting_commit():
+            commits.append(1)
+            await real_commit()
+
+        try:
+            db._db.commit = counting_commit
+
+            async with db.batch():
+                await db.mark_anon_uid(uid="a1")
+                async with db.batch():                 # nested -> still no commit
+                    await db.mark_anon_uid(uid="a2")
+                assert commits == []
+            assert len(commits) == 1
+
+            try:
+                async with db.batch():
+                    await db.mark_anon_uid(uid="a3")
+                    raise RuntimeError("mid-reconcile failure")
+            except RuntimeError:
+                pass
+            assert len(commits) == 2
+            db._db.commit = real_commit
+            assert await db.get_anon_uid_set() == {"a1", "a2", "a3"}   # nothing rolled back
+        finally:
+            db._db.commit = real_commit
+            await db.close_db()
+
+    asyncio.run(scenario())
+
+
 def test_gear_uid_vanish_is_a_sale(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "g.db"))
     monkeypatch.setattr(config, "GEAR_VANISH_CONFIRM_POLLS", 1)

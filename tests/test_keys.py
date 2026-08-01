@@ -81,6 +81,39 @@ def _reset_pool():
     keypool._active = []
     keypool._cooldowns.clear()
     keypool._global_pause_until = 0.0
+    keypool._cursor = 0
+
+
+def test_rotation_is_round_robin_not_clock_based():
+    """Regression: next_key used to index by int(time.time()), so every call inside the same second
+    got the SAME key — a burst of concurrent polls piled onto one key and burned its rate budget
+    while the others idled. Consecutive calls must advance regardless of the clock."""
+    _reset_pool()
+    keypool._active = ["K1", "K2", "K3"]
+
+    # 9 calls in the same instant must spread evenly across the 3 keys, in order.
+    got = [keypool.next_key() for _ in range(9)]
+    assert got == ["K1", "K2", "K3"] * 3
+
+    # An immediate retry excludes the key that just failed and still moves on.
+    _reset_pool()
+    keypool._active = ["K1", "K2", "K3"]
+    first = keypool.next_key()
+    assert keypool.next_key(exclude={first}) != first
+    _reset_pool()
+
+
+def test_rotation_skips_cooled_down_keys_and_keeps_cycling(monkeypatch):
+    monkeypatch.setattr(config, "RATE_LIMIT_BACKOFF_SECONDS", 60)
+    monkeypatch.setattr(config, "RATE_LIMIT_GLOBAL_PAUSE", False)
+    _reset_pool()
+    keypool._active = ["K1", "K2", "K3"]
+    keypool.mark_rate_limited("K2")
+
+    got = [keypool.next_key() for _ in range(6)]
+    assert set(got) == {"K1", "K3"}          # the cooling key is never handed out
+    assert got.count("K1") == 3 and got.count("K3") == 3   # ...and the rest still alternate
+    _reset_pool()
 
 
 def test_rate_limit_backs_off_just_that_key(monkeypatch):
