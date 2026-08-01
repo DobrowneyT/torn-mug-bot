@@ -27,10 +27,22 @@ load_dotenv(os.path.join(_ROOT, ".env"))
 import uvicorn  # noqa: E402
 
 import config  # noqa: E402
-from server import db  # noqa: E402
+from server import db, logging_utils  # noqa: E402
 from server.app import create_app  # noqa: E402
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+# httpx logs the full request URL at INFO, and Torn takes the API key as a query parameter — so
+# leaving this at INFO wrote a live credential into the journal on every single API call (thousands
+# an hour), and buried our own logs while doing it. WARNING keeps genuine transport failures.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+# Backstop: even a WARNING from httpx can carry a URL, and future code may log one. Redact at the
+# handler so nothing reaches the journal with a key in it.
+logging_utils.install_redaction()
+
 log = logging.getLogger("mug.main")
 
 
