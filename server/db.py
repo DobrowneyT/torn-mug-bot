@@ -4,11 +4,16 @@ path is effectively single-writer, so a single connection in WAL mode is plenty.
 
 Phase 0 uses raw_events (catch-all) + monitored_pages (status heartbeats). The listings/
 sales/sellers helpers are scaffolded for Phase 1 detection + enrichment.
+
+WRITES: every helper here ends in ``await _commit()`` rather than a bare ``_db.commit()``.
+Inside an ``async with db.batch():`` block those are no-ops and ONE commit happens at the
+end — see ``batch()`` for why that matters.
 """
 
 import json
 import os
 import time
+from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
 import aiosqlite
@@ -47,6 +52,43 @@ _SELLER_FORWARD_COLS = {
 _db: Optional[aiosqlite.Connection] = None
 _db_path: Optional[str] = None
 
+# Nesting depth of open batch() blocks. >0 => the per-helper _commit() calls are suppressed and a
+# single commit is issued when the outermost block exits.
+_batch_depth: int = 0
+
+
+async def _commit() -> None:
+    """Commit unless we're inside a batch() block."""
+    if _batch_depth == 0:
+        await _db.commit()
+
+
+@asynccontextmanager
+async def batch():
+    """Group a burst of writes into ONE transaction, i.e. one fsync instead of one per row.
+
+    Every commit is an fsync, and aiosqlite runs the whole process's SQL on a SINGLE worker
+    thread — so a reconcile pass that commits once per listing doesn't just slow itself down, it
+    stalls the poller, the ingest routes and the alert path behind it. Polling one 60-listing gear
+    item cost 62 commits before this; it now costs 1.
+
+    Nests safely: only the outermost block commits. Concurrent tasks share the single connection
+    (and therefore the transaction) either way — that was already true between commits.
+
+    On an exception we still COMMIT rather than roll back. Before batching, each helper committed
+    as it went, so a mid-reconcile failure left the earlier writes durable; rolling back here would
+    both change that and discard writes made by *other* tasks that happened to land in the same
+    transaction.
+    """
+    global _batch_depth
+    _batch_depth += 1
+    try:
+        yield
+    finally:
+        _batch_depth -= 1
+        if _batch_depth == 0:
+            await _db.commit()
+
 
 def _resolve_db_path() -> str:
     """Use config.DB_PATH (/var/lib/mug-bot) when its dir is writable; otherwise fall back to a
@@ -81,6 +123,11 @@ async def init_db() -> aiosqlite.Connection:
     _db_path = _resolve_db_path()
     _db = await aiosqlite.connect(_db_path)
     _db.row_factory = aiosqlite.Row
+    # Under WAL, synchronous=NORMAL skips the fsync on each commit (the WAL is still fsynced at
+    # checkpoints). A process crash / kill -9 is still safe; only a host power-loss or kernel panic
+    # can lose the last few transactions — an acceptable trade for market snapshots we re-poll
+    # every ~30s anyway, and it removes the dominant cost of the write path.
+    await _db.execute("PRAGMA synchronous = NORMAL")
     with open(SCHEMA_PATH) as f:
         await _db.executescript(f.read())
     await _ensure_columns()
@@ -88,7 +135,7 @@ async def init_db() -> aiosqlite.Connection:
         await _db.execute(
             "INSERT OR IGNORE INTO config(key, value) VALUES (?, ?)", (key, json.dumps(val))
         )
-    await _db.commit()
+    await _commit()
     return _db
 
 
@@ -106,7 +153,7 @@ async def insert_raw_event(source: str, channel: Optional[str], payload_obj: Any
         "INSERT INTO raw_events(source, channel, payload, received_at) VALUES (?,?,?,?)",
         (source, channel, json.dumps(payload_obj), _now()),
     )
-    await _db.commit()
+    await _commit()
 
 
 # --------------------------------- status tracker -------------------------------------
@@ -118,7 +165,7 @@ async def touch_page(page_key: Any, label: Optional[str] = None) -> None:
         "label=COALESCE(excluded.label, monitored_pages.label)",
         (str(page_key), label, _now()),
     )
-    await _db.commit()
+    await _commit()
 
 
 async def get_pages() -> List[Dict]:
@@ -197,7 +244,7 @@ async def set_config(key: str, value: Any) -> None:
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
         (key, json.dumps(value)),
     )
-    await _db.commit()
+    await _commit()
 
 
 # ----------------------------- hospitalize factions -----------------------------------
@@ -231,7 +278,7 @@ async def upsert_item_values(values: Dict[int, Dict]) -> None:
         "market_value=excluded.market_value, fetched_at=excluded.fetched_at",
         [(iid, v.get("name"), v.get("type"), v.get("market_value"), now) for iid, v in values.items()],
     )
-    await _db.commit()
+    await _commit()
 
 
 async def item_ids_by_type(types) -> set:
@@ -283,22 +330,26 @@ async def upsert_unmatched_gear(*, uid, item_id, item_name, price, stat, accurac
         "stat=excluded.stat, accuracy=excluded.accuracy, seen_at=excluded.seen_at",
         (str(uid), item_id, item_name, price, stat, accuracy, _now()),
     )
-    await _db.commit()
+    await _commit()
 
 
 async def remove_unmatched_gear(uid) -> None:
     await _db.execute("DELETE FROM unmatched_gear WHERE uid=?", (str(uid),))
-    await _db.commit()
+    await _commit()
 
 
 async def prune_unmatched_gear(item_id, current_uids) -> None:
-    """Drop unmatched rows for this item whose uid is no longer on the market."""
+    """Drop unmatched rows for this item whose uid is no longer on the market. One DELETE, not one
+    per row — this runs at the end of every gear reconcile."""
     cur = await _db.execute("SELECT uid FROM unmatched_gear WHERE item_id=?", (item_id,))
     gone = [r[0] for r in await cur.fetchall() if r[0] not in current_uids]
-    for uid in gone:
-        await _db.execute("DELETE FROM unmatched_gear WHERE uid=?", (uid,))
-    if gone:
-        await _db.commit()
+    if not gone:
+        return
+    # Bind the (small) gone list rather than the live uid set: a fully-paginated gear item can carry
+    # thousands of live uids, and SQLite caps host parameters per statement.
+    placeholders = ",".join("?" for _ in gone)
+    await _db.execute(f"DELETE FROM unmatched_gear WHERE uid IN ({placeholders})", gone)
+    await _commit()
 
 
 async def clear_unmatched_gear(item_id=None) -> int:
@@ -307,7 +358,7 @@ async def clear_unmatched_gear(item_id=None) -> int:
         cur = await _db.execute("DELETE FROM unmatched_gear")
     else:
         cur = await _db.execute("DELETE FROM unmatched_gear WHERE item_id=?", (item_id,))
-    await _db.commit()
+    await _commit()
     return cur.rowcount
 
 
@@ -318,7 +369,7 @@ async def clear_uncached() -> Dict[str, int]:
     they're genuinely still uncaptured — so this is also a 'are these stale?' check."""
     g = await _db.execute("DELETE FROM unmatched_gear")
     i = await _db.execute("UPDATE watchlist SET last_count=0 WHERE COALESCE(is_gear, 0)=0")
-    await _db.commit()
+    await _commit()
     return {"gear": g.rowcount, "items": i.rowcount}
 
 
@@ -382,7 +433,7 @@ async def mark_anon_uid(*, uid, item_name=None, stat=None, accuracy=None, price=
         (str(uid), item_name, stat, accuracy, price, _now()),
     )
     await _db.execute("DELETE FROM unmatched_gear WHERE uid=?", (str(uid),))
-    await _db.commit()
+    await _commit()
 
 
 async def get_anon_uid_set() -> set:
@@ -425,7 +476,7 @@ async def _ensure_columns() -> None:
         for col, typ in cols.items():
             if col not in have:
                 await _db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
-    await _db.commit()
+    await _commit()
 
 
 # --------------------------------- listings + sales -----------------------------------
@@ -448,7 +499,7 @@ async def upsert_listing(*, listing_id, item_id, item_name, seller_id, price, av
         (str(listing_id), item_id, item_name, seller_id, price, available,
          1 if is_gear else 0, armoury_uid, 1 if anonymous else 0, stats_json, now, now),
     )
-    await _db.commit()
+    await _commit()
 
 
 async def get_listing(listing_id) -> Optional[Dict]:
@@ -462,12 +513,12 @@ async def set_listing_available(listing_id, available) -> None:
         "UPDATE listings SET available=?, updated_at=? WHERE listing_id=?",
         (available, _now(), str(listing_id)),
     )
-    await _db.commit()
+    await _commit()
 
 
 async def delete_listing(listing_id) -> None:
     await _db.execute("DELETE FROM listings WHERE listing_id=?", (str(listing_id),))
-    await _db.commit()
+    await _commit()
 
 
 async def record_sale(*, listing_id, item_id, item_name, seller_id, qty_sold,
@@ -480,14 +531,14 @@ async def record_sale(*, listing_id, item_id, item_name, seller_id, qty_sold,
         (str(listing_id) if listing_id is not None else None, item_id, item_name, seller_id,
          int(qty_sold), int(unit_price or 0), total, sold_at),
     )
-    await _db.commit()
+    await _commit()
     return cur.lastrowid
 
 
 async def delete_sale(sale_id) -> None:
     """Remove a recorded sale (used when a gear vanish turns out to be a delist, not a buy)."""
     await _db.execute("DELETE FROM sales WHERE id=?", (sale_id,))
-    await _db.commit()
+    await _commit()
 
 
 async def seller_window(seller_id, window_seconds) -> Dict:
@@ -513,7 +564,7 @@ async def set_mug_claimed(seller_id, claimed_until) -> None:
         "UPDATE sellers SET mug_claimed_until=? WHERE user_id=?",
         (int(claimed_until), seller_id),
     )
-    await _db.commit()
+    await _commit()
 
 
 # --------------------------------- sellers --------------------------------------------
@@ -530,7 +581,7 @@ async def upsert_seller_seen(*, user_id, name=None, faction=None, online_status=
                last_seen=excluded.last_seen""",
         (user_id, name, faction, online_status, now, now),
     )
-    await _db.commit()
+    await _commit()
 
 
 async def get_seller(user_id) -> Optional[Dict]:
@@ -545,14 +596,14 @@ async def update_seller_enrichment(user_id, fields: Dict) -> None:
         return
     cols = ", ".join(f"{k}=?" for k in fields)
     await _db.execute(f"UPDATE sellers SET {cols} WHERE user_id=?", (*fields.values(), user_id))
-    await _db.commit()
+    await _commit()
 
 
 async def set_last_alerted(user_id, ts=None) -> None:
     await _db.execute(
         "UPDATE sellers SET last_alerted_at=? WHERE user_id=?", (ts or _now(), user_id)
     )
-    await _db.commit()
+    await _commit()
 
 
 async def sellers_in_hospital_due(lead_seconds) -> List[Dict]:
@@ -612,7 +663,7 @@ async def unlink_gear_uid(uid) -> None:
     leaves the market. The sale itself is already recorded in `sales` for the mug-value window, so
     losing the listing is fine — and a relisted uid then shows as unmatched until it's re-marked."""
     await _db.execute("DELETE FROM listings WHERE armoury_uid=?", (str(uid),))
-    await _db.commit()
+    await _commit()
 
 
 # ------------------------------ tracked_gear (poller) ---------------------------------
@@ -632,20 +683,23 @@ async def upsert_tracked_gear(*, uid, item_id, item_name, price, seller_id, stat
                price=excluded.price, seen=COALESCE(tracked_gear.seen, 1) + 1""",
         (str(uid), item_id, item_name, price, seller_id, stats_json, now, now),
     )
-    await _db.commit()
+    await _commit()
 
 
 async def bump_tracked_miss(uid) -> int:
-    await _db.execute("UPDATE tracked_gear SET misses=misses+1 WHERE uid=?", (str(uid),))
-    await _db.commit()
-    cur = await _db.execute("SELECT misses FROM tracked_gear WHERE uid=?", (str(uid),))
+    """Increment and return the miss count in one statement (was UPDATE + commit + SELECT, run once
+    per vanished uid)."""
+    cur = await _db.execute(
+        "UPDATE tracked_gear SET misses=misses+1 WHERE uid=? RETURNING misses", (str(uid),)
+    )
     row = await cur.fetchone()
+    await _commit()
     return int(row[0]) if row else 0
 
 
 async def delete_tracked_gear(uid) -> None:
     await _db.execute("DELETE FROM tracked_gear WHERE uid=?", (str(uid),))
-    await _db.commit()
+    await _commit()
 
 
 # ----------------------------- poll targets (gear + items) ----------------------------
@@ -694,7 +748,7 @@ async def watchlist_ensure(item_id, label=None, is_gear=None) -> None:
         "UPDATE watchlist SET label=COALESCE(label, ?), is_gear=COALESCE(is_gear, ?) WHERE item_id=?",
         (label, g, item_id),
     )
-    await _db.commit()
+    await _commit()
 
 
 async def watchlist_add(item_id, label=None, enabled=True, is_gear=None) -> None:
@@ -706,12 +760,12 @@ async def watchlist_add(item_id, label=None, enabled=True, is_gear=None) -> None
         "is_gear=COALESCE(watchlist.is_gear, excluded.is_gear)",
         (item_id, label, g, 1 if enabled else 0, _now()),
     )
-    await _db.commit()
+    await _commit()
 
 
 async def watchlist_remove(item_id) -> int:
     cur = await _db.execute("DELETE FROM watchlist WHERE item_id=?", (item_id,))
-    await _db.commit()
+    await _commit()
     return cur.rowcount
 
 
@@ -727,14 +781,14 @@ async def watchlist_add_all(items) -> int:
         "is_gear=COALESCE(watchlist.is_gear, excluded.is_gear)",
         rows,
     )
-    await _db.commit()
+    await _commit()
     return len(rows)
 
 
 async def watchlist_clear() -> int:
     """Remove every watched item. Returns how many were removed."""
     cur = await _db.execute("DELETE FROM watchlist")
-    await _db.commit()
+    await _commit()
     return cur.rowcount
 
 
@@ -745,7 +799,7 @@ async def watchlist_set_enabled(item_id, enabled) -> int:
     if not enabled:
         # Disabled items shouldn't keep cluttering the uncached list.
         await _db.execute("DELETE FROM unmatched_gear WHERE item_id=?", (item_id,))
-    await _db.commit()
+    await _commit()
     return cur.rowcount
 
 
@@ -761,7 +815,7 @@ async def watchlist_mark_polled(item_id, count, is_gear=None, category=None) -> 
         await _db.execute(
             "UPDATE watchlist SET category=? WHERE item_id=?", (category, item_id)
         )
-    await _db.commit()
+    await _commit()
 
 
 async def watchlist_remove_by_category(category) -> int:
@@ -774,7 +828,7 @@ async def watchlist_remove_by_category(category) -> int:
         cur = await _db.execute("DELETE FROM watchlist WHERE COALESCE(is_gear,0)=0")
     else:
         cur = await _db.execute("DELETE FROM watchlist WHERE category=?", (category,))
-    await _db.commit()
+    await _commit()
     return cur.rowcount
 
 
@@ -793,7 +847,7 @@ async def watchlist_set_enabled_by_category(category, enabled) -> int:
         cur = await _db.execute("UPDATE watchlist SET enabled=? WHERE category=?", (val, category))
     if not enabled:
         await _db.execute("DELETE FROM unmatched_gear")   # disabled items shouldn't linger uncached
-    await _db.commit()
+    await _commit()
     return cur.rowcount
 
 
@@ -801,7 +855,7 @@ async def watchlist_set_all_enabled(enabled) -> int:
     cur = await _db.execute("UPDATE watchlist SET enabled=?", (1 if enabled else 0,))
     if not enabled:
         await _db.execute("DELETE FROM unmatched_gear")
-    await _db.commit()
+    await _commit()
     return cur.rowcount
 
 
@@ -835,7 +889,7 @@ async def seed_api_keys_from_env(env_keys: List[str]) -> None:
         await _db.execute(
             "INSERT OR IGNORE INTO api_keys(key, enabled, added_at) VALUES (?,1,?)", (k, now)
         )
-    await _db.commit()
+    await _commit()
 
 
 async def get_enabled_api_keys() -> List[str]:
@@ -856,7 +910,7 @@ async def api_key_add(*, key, user_id=None, name=None, level=None) -> None:
         "level=excluded.level, enabled=1, last_ok_at=excluded.last_ok_at, last_error=NULL",
         (key, user_id, name, level, _now(), _now()),
     )
-    await _db.commit()
+    await _commit()
 
 
 async def api_key_set_owner(key, user_id, name, level) -> None:
@@ -867,7 +921,7 @@ async def api_key_set_owner(key, user_id, name, level) -> None:
         "WHERE key=?",
         (user_id, name, level, _now(), key),
     )
-    await _db.commit()
+    await _commit()
 
 
 async def api_key_enable(identifier=None) -> int:
@@ -881,7 +935,7 @@ async def api_key_enable(identifier=None) -> int:
             "WHERE (key=? OR user_id=? OR name=? COLLATE NOCASE) AND enabled=0",
             (identifier, identifier if str(identifier).isdigit() else -1, str(identifier)),
         )
-    await _db.commit()
+    await _commit()
     return cur.rowcount
 
 
@@ -890,7 +944,7 @@ async def api_key_mark_error(key, message) -> None:
         "UPDATE api_keys SET enabled=0, last_error=?, last_error_at=? WHERE key=?",
         (message, _now(), key),
     )
-    await _db.commit()
+    await _commit()
 
 
 async def api_key_info(key) -> Optional[Dict]:
@@ -905,7 +959,7 @@ async def api_key_remove(identifier) -> int:
         "DELETE FROM api_keys WHERE key=? OR user_id=? OR name=? COLLATE NOCASE",
         (identifier, identifier if str(identifier).isdigit() else -1, str(identifier)),
     )
-    await _db.commit()
+    await _commit()
     return cur.rowcount
 
 
@@ -966,21 +1020,19 @@ async def upsert_tracked_item(*, item_id, price, seller_id, item_name, last_amou
                last_seen=excluded.last_seen""",
         (item_id, price, item_name, seller_id, last_amount, now, now),
     )
-    await _db.commit()
+    await _commit()
 
 
 async def bump_tracked_item_miss(item_id, price) -> int:
-    await _db.execute(
-        "UPDATE tracked_items SET misses=misses+1 WHERE item_id=? AND price=?", (item_id, price)
-    )
-    await _db.commit()
     cur = await _db.execute(
-        "SELECT misses FROM tracked_items WHERE item_id=? AND price=?", (item_id, price)
+        "UPDATE tracked_items SET misses=misses+1 WHERE item_id=? AND price=? RETURNING misses",
+        (item_id, price),
     )
     row = await cur.fetchone()
+    await _commit()
     return int(row[0]) if row else 0
 
 
 async def delete_tracked_item(item_id, price) -> None:
     await _db.execute("DELETE FROM tracked_items WHERE item_id=? AND price=?", (item_id, price))
-    await _db.commit()
+    await _commit()
