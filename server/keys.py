@@ -29,6 +29,7 @@ _active: List[str] = []
 _pending_alerts: List[Dict] = []   # drained by the bot loop -> posted to the status channel
 _cooldowns: Dict[str, float] = {}  # key -> unix ts until which it is rate-limited (skipped)
 _global_pause_until: float = 0.0   # all keys paused until this ts (optional)
+_cursor: int = 0                   # round-robin position in _active (see next_key)
 
 
 def _mask(key: str) -> str:
@@ -36,16 +37,32 @@ def _mask(key: str) -> str:
 
 
 def next_key(exclude=frozenset()) -> Optional[str]:
-    """Rotate across active keys, skipping any that are cooling down from a rate-limit (and any in
-    `exclude`, used to pick a DIFFERENT key on an immediate retry). Returns None when paused globally
-    or when every active key is cooling down / excluded."""
+    """Hand out the next active key, round-robin, skipping any cooling down from a rate-limit (and
+    any in `exclude`, used to pick a DIFFERENT key on an immediate retry). Returns None when paused
+    globally or when every active key is cooling down / excluded.
+
+    The position is a CALL COUNTER, not the clock. It used to be `available[int(now) % len(...)]`,
+    which handed every call made within the same wall-clock second the same key — so a burst of
+    concurrent polls (MAX_CONCURRENT_POLLS auto-sizes to the key count precisely so each in-flight
+    call lands on a different key) all piled onto one key and burned its ~100 req/min budget while
+    the others idled. Each rate-limit then costs that key RATE_LIMIT_BACKOFF_SECONDS of availability,
+    which shows up as delayed sale detection.
+    """
+    global _cursor
     now = time.time()
     if now < _global_pause_until:
         return None
-    available = [k for k in _active if _cooldowns.get(k, 0) <= now and k not in exclude]
-    if not available:
+    n = len(_active)
+    if n == 0:
         return None
-    return available[int(now) % len(available)]
+    for offset in range(n):
+        idx = (_cursor + offset) % n
+        key = _active[idx]
+        if _cooldowns.get(key, 0) > now or key in exclude:
+            continue
+        _cursor = (idx + 1) % n    # resume AFTER this key, so the next call moves on
+        return key
+    return None
 
 
 def mark_rate_limited(key: str) -> None:
