@@ -971,23 +971,43 @@ async def watchlist_set_all_enabled(enabled) -> int:
     return cur.rowcount
 
 
+async def _counts_by_item(sql: str) -> Dict[int, int]:
+    cur = await _db.execute(sql)
+    return {r[0]: r[1] for r in await cur.fetchall()}
+
+
 async def watchlist_status() -> List[Dict]:
+    """Per-item capture/tracking counts for the Discord status panel.
+
+    Four queries regardless of watch-list size. It used to run two extra scalar queries PER ROW —
+    393 round trips at 196 watched items, ~56ms — every time the panel refreshed, which is every 30s
+    plus (debounced) on every gear capture, all on the one aiosqlite worker thread that sale
+    detection also queues on. Three GROUP BY aggregates joined in Python give identical numbers.
+
+    Aggregates rather than one query with three LEFT JOINs: joining three unrelated tables onto the
+    watchlist multiplies rows, and the tracked count has to come from a different table depending on
+    is_gear, which a single join can't express cleanly.
+    """
     cur = await _db.execute("SELECT * FROM watchlist ORDER BY enabled DESC, label")
+    rows = [dict(x) for x in await cur.fetchall()]
+    captured = await _counts_by_item(
+        "SELECT item_id, COUNT(*) FROM listings WHERE seller_id IS NOT NULL GROUP BY item_id")
+    gear_tracked = await _counts_by_item(
+        "SELECT item_id, COUNT(*) FROM tracked_gear GROUP BY item_id")
+    item_tracked = await _counts_by_item(
+        "SELECT item_id, COUNT(*) FROM tracked_items GROUP BY item_id")
+
     out = []
-    for r in [dict(x) for x in await cur.fetchall()]:
+    for r in rows:
         iid = r["item_id"]
-        captured = await _scalar1(
-            "SELECT COUNT(*) FROM listings WHERE item_id=? AND seller_id IS NOT NULL", iid
-        )
-        if r["is_gear"]:
-            tracked = await _scalar1("SELECT COUNT(*) FROM tracked_gear WHERE item_id=?", iid)
-        else:
-            tracked = await _scalar1("SELECT COUNT(*) FROM tracked_items WHERE item_id=?", iid)
+        # is_gear may be NULL (not yet detected); NULL falls to the stackable side, as before.
+        tracked = (gear_tracked if r["is_gear"] else item_tracked).get(iid, 0)
         out.append({
             "item_id": iid, "label": r["label"] or f"Item {iid}", "enabled": bool(r["enabled"]),
             "is_gear": (None if r["is_gear"] is None else bool(r["is_gear"])),
             "category": r["category"],
-            "captured": captured, "tracked": tracked, "last_polled_ts": r["last_polled_at"],
+            "captured": captured.get(iid, 0), "tracked": tracked,
+            "last_polled_ts": r["last_polled_at"],
         })
     return out
 
