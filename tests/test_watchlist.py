@@ -98,7 +98,9 @@ def test_matcher_request_is_gear_only(tmp_path, monkeypatch):
 
 def test_api_call_estimate(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "est.db"))
-    monkeypatch.setattr(config, "GEAR_POLL_INTERVAL_SECONDS", 30)
+    # The real cadence: each item is repolled at cache_timestamp + CACHE_REPOLL_OFFSET, i.e. about
+    # once a minute — NOT the nominal GEAR_POLL_INTERVAL_SECONDS the estimate used to divide by.
+    monkeypatch.setattr(config, "CACHE_REPOLL_OFFSET", 60)
     monkeypatch.setattr(config, "MAX_PAGES_GEAR", 50)
     monkeypatch.setattr(config, "MAX_PAGES_ITEM", 1)
 
@@ -112,7 +114,7 @@ def test_api_call_estimate(tmp_path, monkeypatch):
         est = await db.api_call_estimate()
         assert est["enabled"] == 2
         assert est["calls_per_poll"] == 4          # 3 (gear) + 1 (item)
-        assert est["calls_per_min"] == 8           # 4 * (60/30)
+        assert est["calls_per_min"] == 4           # 4 per item-cycle, one cycle a minute
         await db.close_db()
 
     asyncio.run(scenario())

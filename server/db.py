@@ -284,9 +284,14 @@ async def status_snapshot() -> Dict:
 
 
 async def api_call_estimate() -> Dict:
-    """Estimate the Torn API call volume for the ENABLED watch list: each item costs 1 call per
-    page per poll (gear paginates by listing count, ~100/page; items are 1 page), and we poll
-    every GEAR_POLL_INTERVAL_SECONDS. Returns {enabled, calls_per_poll, calls_per_min}."""
+    """Estimate Torn API call volume for the ENABLED watch list, against the pool's capacity.
+
+    Each item costs one call per page per poll (gear paginates by listing count, ~100/page; items
+    are one page). The cadence is CACHE_REPOLL_OFFSET, not GEAR_POLL_INTERVAL_SECONDS: scheduling
+    moved to cache_timestamp-driven ~60s cycles, but this still divided by the old nominal 30s, so
+    the figure it reported was roughly DOUBLE the truth — an estimate nobody could trust.
+
+    Returns {enabled, calls_per_poll, calls_per_min, capacity_per_min}."""
     cur = await _db.execute("SELECT is_gear, last_count FROM watchlist WHERE enabled=1")
     rows = await cur.fetchall()
     calls_per_poll = 0
@@ -297,11 +302,13 @@ async def api_call_estimate() -> Dict:
         else:
             pages = config.MAX_PAGES_ITEM
         calls_per_poll += pages
-    polls_per_min = 60.0 / max(config.GEAR_POLL_INTERVAL_SECONDS, 1)
+    polls_per_min = 60.0 / max(config.CACHE_REPOLL_OFFSET, 1)
+    from server import keys as keypool     # local import: keys imports db
     return {
         "enabled": len(rows),
         "calls_per_poll": calls_per_poll,
         "calls_per_min": int(round(calls_per_poll * polls_per_min)),
+        "capacity_per_min": keypool.active_count() * config.KEY_BUDGET_PER_MIN,
     }
 
 
