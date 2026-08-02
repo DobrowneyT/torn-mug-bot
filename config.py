@@ -56,7 +56,8 @@ HTTP_USER_AGENT = os.environ.get("MUG_HTTP_USER_AGENT", "Mozilla/5.0 (compatible
 # it; if every key is cooling down, all calls pause until one recovers).
 RATE_LIMIT_BACKOFF_SECONDS = int(os.environ.get("MUG_RATE_LIMIT_BACKOFF", "60"))
 # If true, a single rate-limit pauses ALL keys for the backoff (vs only the offending key).
-RATE_LIMIT_GLOBAL_PAUSE = (os.environ.get("MUG_RATE_LIMIT_GLOBAL_PAUSE", "false") or "").strip().lower() in ("1", "true", "yes")
+RATE_LIMIT_GLOBAL_PAUSE = (
+    os.environ.get("MUG_RATE_LIMIT_GLOBAL_PAUSE", "false") or "").strip().lower() in ("1", "true", "yes")
 # On a KEY-specific Torn error (rate-limit / bad key), immediately retry the call on the next key in
 # the rotation, up to this many keys, before giving up. Torn-SIDE errors (backend/IP) don't retry
 # (another key from the same IP won't help). 1 = no retry (old behaviour).
@@ -160,7 +161,8 @@ WATCH_ITEM_IDS = [int(x) for x in (os.environ.get("MUG_WATCH_ITEM_IDS", "") or "
 # Items: a quantity drop at a unique price is a confident sale; a unique-priced listing fully
 # vanishing is ambiguous (sale vs delist vs reprice). Default: only alert on quantity drops.
 ITEM_VANISH_CONFIRM_POLLS = int(os.environ.get("MUG_ITEM_VANISH_CONFIRM_POLLS", "1"))
-ITEM_ALERT_ON_REMOVE = (os.environ.get("MUG_ITEM_ALERT_ON_REMOVE", "false") or "").strip().lower() in ("1", "true", "yes")
+ITEM_ALERT_ON_REMOVE = (
+    os.environ.get("MUG_ITEM_ALERT_ON_REMOVE", "false") or "").strip().lower() in ("1", "true", "yes")
 
 # Delist guard (GEAR), DISABLED by default (0): formerly, if the seller acted within this many
 # seconds of a vanish we'd assume a delist and drop it. We now alert on every vanish (you judge
@@ -235,7 +237,8 @@ ITEM_DEAL_PCT = 50                   # alert when listed <= (100 - this)% of mar
 # ---- Hospitalize factions ----
 # Sellers in these factions are flagged HOSPITALIZE (don't mug — put them in hospital) on the alert.
 # Seed list (comma-separated faction ids); editable live via /faction add|remove (config table).
-HOSPITALIZE_FACTION_IDS = [int(x) for x in (os.environ.get("MUG_HOSPITALIZE_FACTION_IDS", "") or "").split(",") if x.strip().isdigit()]
+HOSPITALIZE_FACTION_IDS = [
+    int(x) for x in (os.environ.get("MUG_HOSPITALIZE_FACTION_IDS", "") or "").split(",") if x.strip().isdigit()]
 
 # ---- Status tracker ----
 # A page must heartbeat at least this often (only happens while actively viewed);

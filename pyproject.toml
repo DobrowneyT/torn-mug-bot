@@ -1,0 +1,26 @@
+# Lint configuration. Tuned to the code that already exists, not to ruff's defaults: the point is
+# catching mistakes, not restyling a working codebase. A config that reformatted every file would
+# bury any real finding in noise, and nobody would read the next run.
+[tool.ruff]
+# The codebase already writes to ~110-120 columns, with long explanatory comments by design.
+line-length = 120
+target-version = "py312"
+# Exploratory one-off analysis scripts, not shipped code.
+exclude = ["market-research", "scratch", ".venv"]
+
+[tool.ruff.lint]
+# Deliberately narrow to start:
+#   E - pycodestyle errors
+#   F - pyflakes: unused imports/variables, undefined names — the ones that are actual bugs
+#   I - import ordering
+# Expand later if it earns its keep. Rules that would require changing behaviour rather than
+# formatting should be disabled and raised as their own issue, not smuggled into a lint pass.
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# main.py imports dotenv and then config only AFTER sys.path is set up and .env is loaded — config
+# reads the environment at import time, so the order is load-bearing, not an oversight. The existing
+# `# noqa: E402` comments document it inline.
+"main.py" = ["E402"]
+# Mock fixtures are tabular: one record per line reads far better than wrapped, even at 160 columns.
+"bot/mock_data.py" = ["E501"]

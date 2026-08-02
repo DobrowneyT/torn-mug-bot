@@ -232,7 +232,8 @@ async def _evaluate_alert(seller_id, seller: Optional[Dict], bot, last_item=None
     win, res, protection_pct = await _mug_protect_adjust(seller, win)
     la = (seller or {}).get("last_action_ts")
     state = (seller or {}).get("status_state")
-    log.info("mug-eval seller=%s: raw=%s adj=%s mug=%s-%s qualifies=%s protection=%s%% | status=%s last_action=%ss-ago online=%s",
+    log.info("mug-eval seller=%s: raw=%s adj=%s mug=%s-%s qualifies=%s protection=%s%% "
+             "| status=%s last_action=%ss-ago online=%s",
              seller_id, raw_total, win["total"], res.mug_min, res.mug_max, res.qualifies, protection_pct,
              state, (int(time.time()) - int(la)) if la else "?", (seller or {}).get("online_status"))
     if not res.qualifies:

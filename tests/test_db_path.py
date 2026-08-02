@@ -40,7 +40,7 @@ def test_fallback_warns_and_names_the_env_var(tmp_path, monkeypatch, caplog):
 def test_fallback_inside_a_git_checkout_is_escalated(tmp_path, monkeypatch, caplog):
     """The dangerous case: the DB would live in a working tree, where git can destroy it."""
     os.makedirs(tmp_path / ".git")
-    fallback = _force_fallback(monkeypatch, tmp_path)
+    _force_fallback(monkeypatch, tmp_path)
     with caplog.at_level(logging.WARNING, logger="mug.db"):
         db._resolve_db_path()
     msg = caplog.records[0].getMessage()
@@ -50,7 +50,7 @@ def test_fallback_inside_a_git_checkout_is_escalated(tmp_path, monkeypatch, capl
 
 def test_fallback_outside_a_checkout_is_not_escalated(tmp_path, monkeypatch, caplog):
     # tmp_path has no .git at or above it, so this is the benign fallback.
-    fallback = _force_fallback(monkeypatch, tmp_path)
+    _force_fallback(monkeypatch, tmp_path)
     with caplog.at_level(logging.WARNING, logger="mug.db"):
         db._resolve_db_path()
     assert "GIT CHECKOUT" not in caplog.records[0].getMessage()

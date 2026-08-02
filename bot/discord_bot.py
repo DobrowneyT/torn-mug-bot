@@ -204,7 +204,9 @@ class MugBot(discord.Client):
             choices = _ac_choices(current, [(w["item_id"], w["label"]) for w in await db.watchlist_status()])
             return _with_shortcuts(choices, current)
 
-        @watch.command(name="add", description="Watch items — names/ids, or a category (all, items, primary, secondary, melee, armour)")
+        @watch.command(
+            name="add",
+            description="Watch items — names/ids, or a category (all, items, primary, secondary, melee, armour)")
         @app_commands.describe(items="Item name(s)/id(s) or category keyword(s), comma-separated")
         @app_commands.autocomplete(items=_ac_catalog)
         async def watch_add(interaction: discord.Interaction, items: str):
@@ -234,7 +236,9 @@ class MugBot(discord.Client):
                         "the items fetch runs shortly after start; try again in ~30s.")
             await interaction.response.send_message(msg, ephemeral=True)
 
-        @watch.command(name="remove", description="Stop watching items — names/ids, or a category (all, items, primary, …)")
+        @watch.command(
+            name="remove",
+            description="Stop watching items — names/ids, or a category (all, items, primary, …)")
         @app_commands.autocomplete(items=_ac_watched)
         async def watch_remove(interaction: discord.Interaction, items: str):
             total, ok, failed = 0, [], []
@@ -478,7 +482,9 @@ class MugBot(discord.Client):
                 + (", ".join(f"`{t}`" for t in toks) or "*(none — all gear uses the bonus filter)*"),
                 ephemeral=True)
 
-        @gearbonus.command(name="add", description="Capture ALL listings for a category (primary/secondary/melee/armour) or item")
+        @gearbonus.command(
+            name="add",
+            description="Capture ALL listings for a category (primary/secondary/melee/armour) or item")
         @app_commands.describe(targets="Category keyword(s) and/or item name(s)/id(s), comma-separated")
         @app_commands.autocomplete(targets=_ac_gearcats)
         async def gearbonus_add(interaction: discord.Interaction, targets: str):
@@ -521,7 +527,8 @@ class MugBot(discord.Client):
             name="delist",
             description="Configure likely-de-list handling (buffer + ping/silent/off)")
         @app_commands.describe(
-            seconds="Flag a gear vanish as a likely de-list if the seller was online and acted within this many seconds (0 disables the flag)",
+            seconds="Flag a gear vanish as a likely de-list if the seller was online and acted within "
+                    "this many seconds (0 disables the flag)",
             mode="What to do with likely de-lists")
         @app_commands.choices(mode=[
             app_commands.Choice(name="ping — post + ping the mug role (default)", value="ping"),
