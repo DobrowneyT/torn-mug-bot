@@ -303,7 +303,7 @@ async def api_call_estimate() -> Dict:
             pages = config.MAX_PAGES_ITEM
         calls_per_poll += pages
     polls_per_min = 60.0 / max(config.CACHE_REPOLL_OFFSET, 1)
-    from server import keys as keypool     # local import: keys imports db
+    from server import keys as keypool  # local import: keys imports db
     return {
         "enabled": len(rows),
         "calls_per_poll": calls_per_poll,

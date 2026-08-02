@@ -1,7 +1,8 @@
 import asyncio
 
 import config
-from server import keys as keypool, torn
+from server import keys as keypool
+from server import torn
 
 
 class _Resp:

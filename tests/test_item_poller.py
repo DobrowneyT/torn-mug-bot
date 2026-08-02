@@ -96,9 +96,11 @@ def test_item_price_collision_skipped(tmp_path, monkeypatch):
         )
         bot = FakeBot()
         # two listings at the round price 4M -> ambiguous -> not tracked, even on a drop.
-        await api_poller.reconcile_items(bot, 206, [{"price": 4_000_000, "amount": 5}, {"price": 4_000_000, "amount": 2}])
+        await api_poller.reconcile_items(
+            bot, 206, [{"price": 4_000_000, "amount": 5}, {"price": 4_000_000, "amount": 2}])
         assert await db.get_tracked_items(206) == {}
-        await api_poller.reconcile_items(bot, 206, [{"price": 4_000_000, "amount": 1}, {"price": 4_000_000, "amount": 2}])
+        await api_poller.reconcile_items(
+            bot, 206, [{"price": 4_000_000, "amount": 1}, {"price": 4_000_000, "amount": 2}])
         assert bot.alerts == []
         await db.close_db()
 
