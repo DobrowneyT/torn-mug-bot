@@ -44,13 +44,24 @@ main() {
     exit 0
   fi
 
-  # A dirty tree means someone edited files on the server. Stop rather than merge over it or
-  # silently discard it: the userscripts in particular get hand-edited on the box. Checked before
-  # anything is reported or changed, so the refusal is the first thing you see.
-  if [ -n "$(git status --porcelain)" ]; then
-    echo "ERROR: working tree is dirty — refusing to deploy. Commit, stash or revert:" >&2
-    git status --short >&2
+  # Locally MODIFIED TRACKED files mean someone edited the deployed code in place; merging over that
+  # would silently discard their work, so stop. Checked before anything is reported or changed, so
+  # the refusal is the first thing you see.
+  if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+    echo "ERROR: tracked files have local changes — refusing to deploy. Commit, stash or revert:" >&2
+    git status --short --untracked-files=no >&2
     exit 1
+  fi
+
+  # UNTRACKED files are only noted. They can't be lost by a fast-forward, and if an incoming commit
+  # would overwrite one, git itself refuses the merge with a precise message. Blocking on them was
+  # too strict and produced repeated false stops on the real box — a database backup, SQLite WAL
+  # sidecars, a stray shell redirect — none of which endanger anything.
+  local untracked
+  untracked="$(git ls-files --others --exclude-standard)"
+  if [ -n "$untracked" ]; then
+    echo "[note] untracked files present (not a problem for the deploy):"
+    printf '%s\n' "$untracked" | sed 's/^/  /'
   fi
 
   if [ "$local_sha" = "$remote_sha" ]; then
