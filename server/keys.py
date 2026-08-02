@@ -31,9 +31,48 @@ _cooldowns: Dict[str, float] = {}  # key -> unix ts until which it is rate-limit
 _global_pause_until: float = 0.0   # all keys paused until this ts (optional)
 _cursor: int = 0                   # round-robin position in _active (see next_key)
 
+# Per-key budget. Torn allows ~100 requests/minute PER KEY; the pool previously discovered that
+# limit only by being told (error 5), and each such error then parks the key for
+# RATE_LIMIT_BACKOFF_SECONDS — shrinking the pool exactly when we are busiest. A token bucket lets
+# us skip a key BEFORE overrunning it. Refill is continuous rather than in 60s steps: step refills
+# produce a burst at each boundary, which is the behaviour we are trying to avoid.
+_tokens: Dict[str, float] = {}     # key -> tokens currently available
+_refilled_at: Dict[str, float] = {}
+
+
+def _now() -> float:
+    """Indirection so tests can drive the clock instead of sleeping."""
+    return time.time()
+
 
 def _mask(key: str) -> str:
     return f"…{key[-4:]}" if key else "?"
+
+
+def _budget(key: str, now: float) -> float:
+    """Tokens available for `key`, refilled for elapsed time. New keys start full."""
+    cap = float(config.KEY_BUDGET_PER_MIN)
+    if cap <= 0:
+        return 1.0                                  # budget disabled
+    last = _refilled_at.get(key)
+    if last is None:
+        _tokens[key] = cap
+        _refilled_at[key] = now
+        return cap
+    tokens = min(cap, _tokens.get(key, cap) + (now - last) * cap / 60.0)
+    _tokens[key] = tokens
+    _refilled_at[key] = now
+    return tokens
+
+
+def _spend(key: str) -> None:
+    if config.KEY_BUDGET_PER_MIN > 0:
+        _tokens[key] = max(0.0, _tokens.get(key, 0.0) - 1.0)
+
+
+def budget_remaining(key: str) -> int:
+    """Whole tokens left for a key — surfaced by /keys list so pool sizing is visible."""
+    return int(_budget(key, _now()))
 
 
 def next_key(exclude=frozenset()) -> Optional[str]:
@@ -49,26 +88,40 @@ def next_key(exclude=frozenset()) -> Optional[str]:
     which shows up as delayed sale detection.
     """
     global _cursor
-    now = time.time()
+    now = _now()
     if now < _global_pause_until:
         return None
     n = len(_active)
     if n == 0:
         return None
+    starved = 0
     for offset in range(n):
         idx = (_cursor + offset) % n
         key = _active[idx]
         if _cooldowns.get(key, 0) > now or key in exclude:
             continue
+        if _budget(key, now) < 1.0:
+            starved += 1
+            continue
+        _spend(key)
         _cursor = (idx + 1) % n    # resume AFTER this key, so the next call moves on
         return key
+    if starved:
+        # Distinct from a rate-limit: we stopped ourselves rather than being told to. It means the
+        # pool is too small for the watch list — add keys or trim it (see the status panel estimate).
+        log.warning("all %d key(s) out of request budget (%s/min each) — pausing calls briefly",
+                    starved, config.KEY_BUDGET_PER_MIN)
     return None
 
 
 def mark_rate_limited(key: str) -> None:
-    """Torn error 5: back the key off for RATE_LIMIT_BACKOFF_SECONDS (and optionally all keys)."""
+    """Torn error 5: back the key off for RATE_LIMIT_BACKOFF_SECONDS (and optionally all keys).
+
+    With the token bucket in place this should be rare — reaching it means our budget estimate is
+    wrong, or another client is using the same key."""
     global _global_pause_until
-    now = time.time()
+    now = _now()
+    _tokens[key] = 0.0            # Torn says it is spent; believe that over our own accounting
     _cooldowns[key] = now + config.RATE_LIMIT_BACKOFF_SECONDS
     if config.RATE_LIMIT_GLOBAL_PAUSE:
         _global_pause_until = now + config.RATE_LIMIT_BACKOFF_SECONDS
@@ -83,8 +136,17 @@ def active_count() -> int:
 
 
 async def refresh() -> None:
+    """Reload the active pool from the DB and forget per-key state for keys that are gone.
+
+    Without the cleanup, a removed or disabled key keeps its cooldown and token entries forever —
+    a slow leak, and worse, a key re-enabled later would resume with whatever budget it had when it
+    left rather than a clean slate."""
     global _active
     _active = await db.get_enabled_api_keys()
+    live = set(_active)
+    for store in (_cooldowns, _tokens, _refilled_at):
+        for gone in [k for k in store if k not in live]:
+            store.pop(gone, None)
 
 
 async def validate_key(client: httpx.AsyncClient, key: str) -> Dict:

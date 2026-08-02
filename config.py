@@ -61,6 +61,10 @@ RATE_LIMIT_GLOBAL_PAUSE = (os.environ.get("MUG_RATE_LIMIT_GLOBAL_PAUSE", "false"
 # the rotation, up to this many keys, before giving up. Torn-SIDE errors (backend/IP) don't retry
 # (another key from the same IP won't help). 1 = no retry (old behaviour).
 API_MAX_KEY_RETRIES = int(os.environ.get("MUG_API_MAX_KEY_RETRIES", "3"))
+# Requests per minute allowed PER KEY before the rotation skips it. Torn's own limit is ~100/min;
+# staying under it ourselves means we stop hitting error 5, which parks a key for
+# RATE_LIMIT_BACKOFF_SECONDS and shrinks the pool exactly when we're busiest. 0 disables the budget.
+KEY_BUDGET_PER_MIN = int(os.environ.get("MUG_KEY_BUDGET_PER_MIN", "100"))
 
 # ---- Raw ingest capture (Phase 0 discovery) ----
 # OFF by default. Every ingest POST used to be appended to scratch/dumps/*.jsonl AND inserted into

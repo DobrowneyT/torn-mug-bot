@@ -403,7 +403,11 @@ class MugBot(discord.Client):
                 mark = "🟢" if r["enabled"] else "🔴"
                 owner = f"{r.get('name') or '?'} ({r.get('user_id') or '?'})"
                 err = f" — ⚠️ {r['last_error']}" if r.get("last_error") else ""
-                lines.append(f"{mark} {owner} `{_mask(r['key'])}`{err}")
+                # Remaining request budget makes pool sizing visible: keys sitting near zero mean
+                # the watch list is bigger than the pool can serve.
+                budget = (f" · {keypool.budget_remaining(r['key'])}/{config.KEY_BUDGET_PER_MIN} left"
+                          if r["enabled"] and config.KEY_BUDGET_PER_MIN > 0 else "")
+                lines.append(f"{mark} {owner} `{_mask(r['key'])}`{budget}{err}")
             await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
         self.tree.add_command(keys_group)

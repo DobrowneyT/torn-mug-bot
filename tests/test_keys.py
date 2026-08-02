@@ -80,6 +80,8 @@ def test_validate_all_does_not_disable_on_transient(tmp_path, monkeypatch):
 def _reset_pool():
     keypool._active = []
     keypool._cooldowns.clear()
+    keypool._tokens.clear()          # budget state is per-key and persists across calls
+    keypool._refilled_at.clear()
     keypool._global_pause_until = 0.0
     keypool._cursor = 0
 
@@ -137,4 +139,95 @@ def test_rate_limit_global_pause(monkeypatch):
     keypool._active = ["K1", "K2"]
     keypool.mark_rate_limited("K1")                            # one limit pauses everything
     assert keypool.next_key() is None
+    _reset_pool()
+
+
+def _fake_clock(monkeypatch, start=1_000_000.0):
+    """Drive keys._now() by hand: budget behaviour is time-based and sleeping would be slow+flaky."""
+    clock = {"t": start}
+    monkeypatch.setattr(keypool, "_now", lambda: clock["t"])
+    return clock
+
+
+def test_budget_exhausts_a_key_before_torn_has_to_tell_us(monkeypatch):
+    monkeypatch.setattr(config, "KEY_BUDGET_PER_MIN", 100)
+    _fake_clock(monkeypatch)
+    _reset_pool()
+    keypool._active = ["K1"]
+
+    got = [keypool.next_key() for _ in range(100)]
+    assert got == ["K1"] * 100          # exactly the budget
+    assert keypool.next_key() is None   # the 101st is refused by US, not by Torn
+    _reset_pool()
+
+
+def test_budget_refills_continuously_not_in_steps(monkeypatch):
+    monkeypatch.setattr(config, "KEY_BUDGET_PER_MIN", 100)
+    clock = _fake_clock(monkeypatch)
+    _reset_pool()
+    keypool._active = ["K1"]
+
+    for _ in range(100):
+        keypool.next_key()
+    assert keypool.next_key() is None
+
+    clock["t"] += 30                     # half a minute -> about half the budget back
+    assert 45 <= keypool.budget_remaining("K1") <= 55
+    assert keypool.next_key() == "K1"
+
+    clock["t"] += 3600                   # long idle must not overfill
+    assert keypool.budget_remaining("K1") == 100
+    _reset_pool()
+
+
+def test_budget_is_per_key(monkeypatch):
+    monkeypatch.setattr(config, "KEY_BUDGET_PER_MIN", 10)
+    _fake_clock(monkeypatch)
+    _reset_pool()
+    keypool._active = ["K1", "K2"]
+
+    got = [keypool.next_key() for _ in range(20)]
+    assert got.count("K1") == 10 and got.count("K2") == 10   # 2 keys => 2x the budget
+    assert keypool.next_key() is None
+    _reset_pool()
+
+
+def test_budget_and_cooldown_are_independent(monkeypatch):
+    """A rate-limited key with budget left is still skipped, and vice versa."""
+    monkeypatch.setattr(config, "KEY_BUDGET_PER_MIN", 100)
+    monkeypatch.setattr(config, "RATE_LIMIT_BACKOFF_SECONDS", 60)
+    monkeypatch.setattr(config, "RATE_LIMIT_GLOBAL_PAUSE", False)
+    clock = _fake_clock(monkeypatch)
+    _reset_pool()
+    keypool._active = ["K1", "K2"]
+
+    keypool.mark_rate_limited("K1")                 # cooling down despite a full budget
+    assert {keypool.next_key() for _ in range(5)} == {"K2"}
+
+    clock["t"] += 61                                # cooldown elapsed -> K1 usable again
+    assert "K1" in {keypool.next_key() for _ in range(5)}
+    _reset_pool()
+
+
+def test_a_rate_limit_zeroes_our_own_accounting(monkeypatch):
+    """If Torn says the key is spent, believe it over our estimate."""
+    monkeypatch.setattr(config, "KEY_BUDGET_PER_MIN", 100)
+    monkeypatch.setattr(config, "RATE_LIMIT_BACKOFF_SECONDS", 0)
+    _fake_clock(monkeypatch)
+    _reset_pool()
+    keypool._active = ["K1"]
+    keypool.next_key()
+    assert keypool.budget_remaining("K1") > 90
+
+    keypool.mark_rate_limited("K1")
+    assert keypool.budget_remaining("K1") == 0
+    _reset_pool()
+
+
+def test_budget_can_be_disabled(monkeypatch):
+    monkeypatch.setattr(config, "KEY_BUDGET_PER_MIN", 0)
+    _fake_clock(monkeypatch)
+    _reset_pool()
+    keypool._active = ["K1"]
+    assert all(keypool.next_key() == "K1" for _ in range(500))
     _reset_pool()
