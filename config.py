@@ -29,9 +29,11 @@ ITEMS_ROLE_ID = int(os.environ.get("MUG_ITEMS_ROLE_ID", "0") or 0)
 # ---- Server ----
 SERVER_HOST = os.environ.get("MUG_SERVER_HOST", "0.0.0.0")
 SERVER_PORT = int(os.environ.get("MUG_SERVER_PORT", "3001"))
-# Data lives OUTSIDE the install dir so package upgrades/reinstalls never touch it. db.init_db
-# falls back to a local file if this dir isn't writable (e.g. local dev without the package).
+# Data lives OUTSIDE the checkout so a deploy, a re-clone or `git clean` can never touch it.
 DB_PATH = os.environ.get("MUG_DB_PATH") or "/var/lib/mug-bot/mug_bot.db"
+# LOCAL DEV ONLY. db._resolve_db_path falls back here when DB_PATH's directory isn't writable, and
+# logs a warning saying so — on a server that means the database is sitting in the git working tree,
+# which is a data-loss risk, not a convenience. Set MUG_DB_PATH there.
 DB_PATH_FALLBACK = os.path.join(os.path.dirname(__file__), "mug_bot.db")
 
 # ---- Torn / enrichment API keys ----
@@ -54,6 +56,12 @@ RATE_LIMIT_GLOBAL_PAUSE = (os.environ.get("MUG_RATE_LIMIT_GLOBAL_PAUSE", "false"
 # the rotation, up to this many keys, before giving up. Torn-SIDE errors (backend/IP) don't retry
 # (another key from the same IP won't help). 1 = no retry (old behaviour).
 API_MAX_KEY_RETRIES = int(os.environ.get("MUG_API_MAX_KEY_RETRIES", "3"))
+
+# ---- Logging ----
+# Level for OUR loggers (mug.*). httpx/httpcore are pinned to WARNING regardless: they log the full
+# request URL, and the Torn key is a query parameter, so at INFO they write live credentials into
+# the journal on every call. DEBUG here raises our verbosity without re-enabling that.
+LOG_LEVEL = (os.environ.get("MUG_LOG_LEVEL", "INFO") or "INFO").strip().upper()
 
 # ---- Debugging ----
 # Verbose gear reconciliation: log, per poll, how every uid was classified (tracked / matched by
