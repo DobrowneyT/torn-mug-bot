@@ -40,13 +40,23 @@ main() {
   sudo chown "$run_user":"$run_user" "$data_dir"
 
   # ---- venv ----
-  if [ ! -d "$repo_dir/.venv" ]; then
-    echo "==> creating venv"
-    python3 -m venv "$repo_dir/.venv"
+  # Validate rather than just test -d: a venv whose interpreter has gone (the directory was renamed,
+  # or the system python was upgraded out from under it) still LOOKS present, and its console scripts
+  # fail with the unhelpful "cannot execute: required file not found" — their shebang hardcodes an
+  # absolute interpreter path. systemd keeps working through all of this because it runs
+  # .venv/bin/python directly, so the breakage only surfaces at the next deploy.
+  if [ ! -x "$repo_dir/.venv/bin/python" ] || ! "$repo_dir/.venv/bin/python" -c '' 2>/dev/null; then
+    if [ -d "$repo_dir/.venv" ]; then
+      echo "==> existing venv is broken (interpreter missing) — rebuilding it"
+    else
+      echo "==> creating venv"
+    fi
+    python3 -m venv --clear "$repo_dir/.venv"
   fi
   echo "==> installing dependencies"
-  "$repo_dir/.venv/bin/pip" install --quiet --upgrade pip
-  "$repo_dir/.venv/bin/pip" install --quiet -r "$repo_dir/requirements.txt"
+  # `python -m pip`, not `.venv/bin/pip`: immune to the stale-shebang problem above.
+  "$repo_dir/.venv/bin/python" -m pip install --quiet --upgrade pip
+  "$repo_dir/.venv/bin/python" -m pip install --quiet -r "$repo_dir/requirements.txt"
 
   # ---- .env (seeded once; never clobbered) ----
   if [ ! -f "$repo_dir/.env" ]; then
