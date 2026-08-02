@@ -63,3 +63,72 @@ def test_no_alert_without_market_value(tmp_path, monkeypatch):
         await db.close_db()
 
     asyncio.run(scenario())
+
+
+def test_a_restart_does_not_re_alert_a_standing_deal(tmp_path, monkeypatch):
+    """The bug: _alerted was memory-only, so every restart re-announced (and re-pinged for) every
+    standing under-market listing. Auto-deploy restarts the bot on every merge, so this went from
+    occasional to routine."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "deals_restart.db"))
+    monkeypatch.setattr(config, "ITEMS_CHANNEL_ID", 123)
+
+    async def scenario():
+        await db.init_db()
+        try:
+            await db.upsert_item_values({206: {"name": "Xanax", "market_value": 1_000_000}})
+            await db.set_config("item_deal_pct", 50)
+            listings = [{"price": 400_000, "amount": 1}]
+
+            bot = FakeBot()
+            deal_finder._alerted.clear()
+            deal_finder._loaded = False
+            await deal_finder.check_item_deals(bot, 206, listings, item_name="Xanax")
+            assert len(bot.deals) == 1
+
+            # simulate a process restart: in-memory state gone, database intact
+            deal_finder._alerted.clear()
+            deal_finder._loaded = False
+
+            bot2 = FakeBot()
+            await deal_finder.check_item_deals(bot2, 206, listings, item_name="Xanax")
+            assert bot2.deals == [], "re-alerted a standing deal after restart"
+        finally:
+            await db.close_db()
+
+    asyncio.run(scenario())
+
+
+def test_a_price_that_leaves_and_returns_can_alert_again(tmp_path, monkeypatch):
+    """Persisting the dedup must not make it permanent — the existing behaviour is that a price
+    which leaves the market is forgotten, so a genuinely new cheap listing still fires."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "deals_return.db"))
+    monkeypatch.setattr(config, "ITEMS_CHANNEL_ID", 123)
+
+    async def scenario():
+        await db.init_db()
+        try:
+            await db.upsert_item_values({206: {"name": "Xanax", "market_value": 1_000_000}})
+            await db.set_config("item_deal_pct", 50)
+            cheap = [{"price": 400_000, "amount": 1}]
+
+            deal_finder._alerted.clear()
+            deal_finder._loaded = False
+            bot = FakeBot()
+            await deal_finder.check_item_deals(bot, 206, cheap, item_name="Xanax")
+            assert len(bot.deals) == 1
+
+            # the cheap listing sells; only a normal-priced one remains
+            await deal_finder.check_item_deals(bot, 206, [{"price": 990_000, "amount": 1}],
+                                               item_name="Xanax")
+            assert await db.get_alerted_deals() == {}      # forgotten in the DB too, not just memory
+
+            # ...and it comes back cheap after a restart -> alerts again
+            deal_finder._alerted.clear()
+            deal_finder._loaded = False
+            bot2 = FakeBot()
+            await deal_finder.check_item_deals(bot2, 206, cheap, item_name="Xanax")
+            assert len(bot2.deals) == 1
+        finally:
+            await db.close_db()
+
+    asyncio.run(scenario())

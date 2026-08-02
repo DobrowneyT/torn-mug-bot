@@ -189,3 +189,13 @@ CREATE TABLE IF NOT EXISTS item_values (
     market_value INTEGER,
     fetched_at   INTEGER
 );
+
+-- Deals already announced to the items channel, so a restart doesn't re-alert (and re-ping) every
+-- standing under-market listing. Kept in step with the in-memory set in deal_finder: a price that
+-- leaves the market is removed here too, so it can alert again if it comes back cheap.
+CREATE TABLE IF NOT EXISTS alerted_deals (
+    item_id    INTEGER NOT NULL,
+    price      INTEGER NOT NULL,
+    alerted_at INTEGER NOT NULL,
+    PRIMARY KEY (item_id, price)
+);
