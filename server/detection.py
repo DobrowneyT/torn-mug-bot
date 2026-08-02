@@ -17,6 +17,7 @@ the seller is in hospital, in which case we hold and the bot's loop posts ~60s b
 import asyncio
 import logging
 import time
+from contextlib import asynccontextmanager
 from typing import Dict, Optional
 
 import httpx
@@ -29,18 +30,34 @@ log = logging.getLogger("mug.detect")
 
 _client: Optional[httpx.AsyncClient] = None
 
-# One lock per seller: sale handling is now spawned as independent tasks (so it never blocks the
-# poll loop), so two sales for the SAME seller could otherwise race on the window/cooldown/claim
-# and double-alert. Serialise per seller; different sellers still run concurrently.
-_seller_locks: Dict[int, "asyncio.Lock"] = {}
+# One lock per seller: sale handling is spawned as independent tasks (so it never blocks the poll
+# loop), so two sales for the SAME seller could otherwise race on the window/cooldown/claim and
+# double-alert. Serialise per seller; different sellers still run concurrently.
+#
+# Each entry is [lock, waiters]. The count exists so the entry can be dropped once nothing holds or
+# wants it: previously a lock was created for every seller ever seen and never removed, so the map
+# grew for the lifetime of a process that runs for months.
+_seller_locks: Dict[int, list] = {}
 
 
-def _seller_lock(seller_id) -> "asyncio.Lock":
-    lock = _seller_locks.get(seller_id)
-    if lock is None:
-        lock = asyncio.Lock()
-        _seller_locks[seller_id] = lock
-    return lock
+@asynccontextmanager
+async def _seller_lock(seller_id):
+    """Hold this seller's lock, releasing and reclaiming the entry when the last user leaves.
+
+    The waiter count is incremented BEFORE awaiting the lock, so a task already queued can never
+    have the entry deleted out from under it by the one that is finishing.
+    """
+    entry = _seller_locks.get(seller_id)
+    if entry is None:
+        entry = _seller_locks[seller_id] = [asyncio.Lock(), 0]
+    entry[1] += 1
+    try:
+        async with entry[0]:
+            yield
+    finally:
+        entry[1] -= 1
+        if entry[1] <= 0:
+            _seller_locks.pop(seller_id, None)
 
 
 def _http() -> httpx.AsyncClient:
