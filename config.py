@@ -39,6 +39,11 @@ DB_PATH_FALLBACK = os.path.join(os.path.dirname(__file__), "mug_bot.db")
 # ---- Torn / enrichment API keys ----
 TORN_API_KEYS = [k.strip() for k in (os.environ.get("TORN_API_KEYS", "") or "").split(",") if k.strip()]
 BSP_API_KEY = os.environ.get("BSP_API_KEY")
+# BSP (lol-manager) is a THIRD PARTY on the alert path, and TBS is display-only — it never affects
+# whether a mug qualifies or what it's worth. Enrichment fetches profile/job/TBS concurrently, so a
+# slow BSP can't add to the others serially, but it still bounds the alert: the gather waits for the
+# slowest. A short timeout caps that. Torn's own calls keep their longer 15s.
+BSP_TIMEOUT_SECONDS = float(os.environ.get("MUG_BSP_TIMEOUT", "3"))
 TORNSTATS_API_KEY = os.environ.get("TORNSTATS_API_KEY")
 # The `comment` attached to every Torn API call (visible to key owners in their API log).
 API_COMMENT = os.environ.get("MUG_API_COMMENT", "MonChoon Market Tracker")
