@@ -169,14 +169,60 @@ lists them rather than merging over your changes.
 
 ### Turning on auto-deploy
 
-Once you have watched a few manual runs, `crontab -e`:
+Two prerequisites, both of which fail *silently* under cron if you skip them.
 
-```
-*/5 * * * * /home/ubuntu/torn/torn-mug-bot/deploy/update.sh --if-changed >> /var/log/mug-bot-deploy.log 2>&1
+**1. Git must authenticate with no terminal.** `update.sh` fetches on every run, including the
+`--if-changed` no-op path. Cron has no TTY, so a passphrase-protected SSH key makes every deploy
+fail with nothing to show for it. Use a **read-only deploy key** with no passphrase — your personal
+key keeps its passphrase and stays usable for everything else:
+
+```bash
+ssh-keygen -t ed25519 -N '' -f ~/.ssh/mug-deploy -C 'mug-bot auto-deploy (read-only)'
+cat ~/.ssh/mug-deploy.pub     # add under repo Settings -> Deploy keys, WITHOUT write access
 ```
 
-The restart needs passwordless sudo — `provision.sh` checks this and prints the exact
-`/etc/sudoers.d/mug-bot` line if it is missing.
+```bash
+cat >> ~/.ssh/config <<'EOF'
+
+Host github-mugbot
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/mug-deploy
+  IdentitiesOnly yes
+EOF
+git remote set-url origin github-mugbot:DobrowneyT/torn-mug-bot.git
+```
+
+Prove it the way cron will experience it — `BatchMode=yes` forbids every interactive prompt:
+
+```bash
+GIT_SSH_COMMAND='ssh -o BatchMode=yes' git fetch origin && echo "OK: works with no terminal"
+```
+
+Read-only is deliberate: the server should only ever consume commits, never produce them.
+
+**2. The restart needs passwordless sudo.** `provision.sh` checks this and prints the exact
+`/etc/sudoers.d/mug-bot` line if it is missing. (Ubuntu cloud images usually grant it already.)
+
+Then install the cron line — non-interactively, so there is no editor to fight:
+
+```bash
+( crontab -l 2>/dev/null; \
+  echo '*/5 * * * * /home/ubuntu/torn/torn-mug-bot/deploy/update.sh --if-changed >> /var/log/mug-bot-deploy.log 2>&1' \
+) | crontab -
+sudo touch /var/log/mug-bot-deploy.log && sudo chown "$USER":"$USER" /var/log/mug-bot-deploy.log
+```
+
+That last line matters: the deploy user cannot create a file in `/var/log` itself, so without it the
+redirect fails and you lose every deploy log.
+
+Verify cron is actually invoking it — **an empty deploy log is ambiguous**, since `--if-changed`
+prints nothing when there is nothing to pull:
+
+```bash
+journalctl -u cron --since '-15 min' | grep mug-bot     # proves cron fired
+cat /var/log/mug-bot-deploy.log                          # proves it ran without errors
+```
 
 Auto-deploy assumes `main` is protected and CI-gated, so only tested code ever reaches the box.
 
