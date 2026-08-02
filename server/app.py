@@ -8,6 +8,7 @@ so status-tracker works from day one. Sale detection + mug alerts are wired in P
 (see the markers in /market).
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -115,15 +116,29 @@ def create_app(bot=None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
     )
-    os.makedirs(DUMP_DIR, exist_ok=True)
+    if config.RAW_CAPTURE:
+        os.makedirs(DUMP_DIR, exist_ok=True)
 
-    async def _dump(source: str, payload: Any) -> None:
-        path = os.path.join(DUMP_DIR, f"{source}-{time.strftime('%Y%m%d')}.jsonl")
+    def _write_dump(path: str, line: str) -> None:
         try:
             with open(path, "a") as f:
-                f.write(json.dumps({"_ts": int(time.time()), "payload": payload}) + "\n")
+                f.write(line)
         except OSError as e:
-            log.warning("dump write failed (%s): %s", source, e)
+            log.warning("dump write failed (%s): %s", path, e)
+
+    async def _dump(source: str, payload: Any) -> None:
+        """Append one payload to a dated JSONL, off the event loop.
+
+        No-op unless MUG_RAW_CAPTURE is set: this is a Phase 0 discovery aid and the parser exists
+        now, so it should not run — or grow — by default. When it IS on, the write goes through a
+        thread: a blocking open()/write() inside an async handler stalls the whole loop, poller and
+        in-flight alerts included, on every ingest POST.
+        """
+        if not config.RAW_CAPTURE:
+            return
+        path = os.path.join(DUMP_DIR, f"{source}-{time.strftime('%Y%m%d')}.jsonl")
+        line = json.dumps({"_ts": int(time.time()), "payload": payload}) + "\n"
+        await asyncio.to_thread(_write_dump, path, line)
 
     @app.get("/health")
     async def health():
@@ -134,7 +149,8 @@ def create_app(bot=None) -> FastAPI:
         body = await request.json()
         channel = body.get("channel") if isinstance(body, dict) else None
         await _dump("market", body)
-        await db.insert_raw_event("market", channel, body)
+        if config.RAW_CAPTURE:
+            await db.insert_raw_event("market", channel, body)
         if config.detection_ws_enabled():
             await detection.process_market_payload(body, bot)
         return {"ok": True}

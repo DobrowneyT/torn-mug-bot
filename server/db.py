@@ -207,6 +207,22 @@ async def close_db() -> None:
 
 # --------------------------------- raw event capture ----------------------------------
 
+async def prune_raw_events(max_age_days: Optional[int] = None) -> int:
+    """Delete raw_events older than the retention window; returns how many went.
+
+    raw_events lives in the same database the poller and the alert path use, so unbounded growth is
+    not free — it was a Phase 0 catch-all that nothing ever cleaned up. VACUUM is deliberately NOT
+    run here: it rewrites the entire file under an exclusive lock, which on a live bot is a far worse
+    stall than the bloat. Reclaim space with a manual VACUUM during a restart window if you need it.
+    """
+    days = config.RAW_RETENTION_DAYS if max_age_days is None else max_age_days
+    if days <= 0:
+        return 0
+    cur = await _db.execute("DELETE FROM raw_events WHERE received_at < ?", (_now() - days * 86400,))
+    await _commit()
+    return cur.rowcount
+
+
 async def insert_raw_event(source: str, channel: Optional[str], payload_obj: Any) -> None:
     await _db.execute(
         "INSERT INTO raw_events(source, channel, payload, received_at) VALUES (?,?,?,?)",

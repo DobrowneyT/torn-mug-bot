@@ -62,6 +62,16 @@ RATE_LIMIT_GLOBAL_PAUSE = (os.environ.get("MUG_RATE_LIMIT_GLOBAL_PAUSE", "false"
 # (another key from the same IP won't help). 1 = no retry (old behaviour).
 API_MAX_KEY_RETRIES = int(os.environ.get("MUG_API_MAX_KEY_RETRIES", "3"))
 
+# ---- Raw ingest capture (Phase 0 discovery) ----
+# OFF by default. Every ingest POST used to be appended to scratch/dumps/*.jsonl AND inserted into
+# the raw_events table, unconditionally and forever, to reverse-engineer the WebSocket schema. That
+# work is done — the parser exists — so this now has to be asked for. When on, dumps are written off
+# the event loop (a blocking write in an async handler stalls the poller and any in-flight alert).
+RAW_CAPTURE = (os.environ.get("MUG_RAW_CAPTURE", "false") or "").strip().lower() in ("1", "true", "yes")
+# raw_events rows older than this are pruned at startup and daily. The table shares a database with
+# the poller and the alert path, so its bloat is not free.
+RAW_RETENTION_DAYS = int(os.environ.get("MUG_RAW_RETENTION_DAYS", "7"))
+
 # ---- Logging ----
 # Level for OUR loggers (mug.*). httpx/httpcore are pinned to WARNING regardless: they log the full
 # request URL, and the Torn key is a query parameter, so at INFO they write live credentials into
