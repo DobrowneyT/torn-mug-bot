@@ -55,6 +55,12 @@ RATE_LIMIT_GLOBAL_PAUSE = (os.environ.get("MUG_RATE_LIMIT_GLOBAL_PAUSE", "false"
 # (another key from the same IP won't help). 1 = no retry (old behaviour).
 API_MAX_KEY_RETRIES = int(os.environ.get("MUG_API_MAX_KEY_RETRIES", "3"))
 
+# ---- Logging ----
+# Level for OUR loggers (mug.*). httpx/httpcore are pinned to WARNING regardless: they log the full
+# request URL, and the Torn key is a query parameter, so at INFO they write live credentials into
+# the journal on every call. DEBUG here raises our verbosity without re-enabling that.
+LOG_LEVEL = (os.environ.get("MUG_LOG_LEVEL", "INFO") or "INFO").strip().upper()
+
 # ---- Debugging ----
 # Verbose gear reconciliation: log, per poll, how every uid was classified (tracked / matched by
 # uid / matched by price / anon / unmatched) + each /gear capture stored. Turn on to diagnose
