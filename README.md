@@ -29,17 +29,23 @@ config.py          thresholds, windows, channel ids, Torn URLs
 server/            FastAPI ingest (app.py), SQLite (db.py, schema.sql)
 bot/               discord_bot.py (live), formatter.py (embeds), state.py, mock_data.py
 scratch/           format_preview.py (mock embeds), dumps/ (raw payload captures)
-systemd/           mug-bot.service
+deploy/            provision.sh (once per box), update.sh (every deploy)
+systemd/           mug-bot.service.template (provision.sh fills in the real paths)
 ```
 
 ## Setup
 
+Local development. For a server, use `deploy/provision.sh` instead — see [Deploy](#deploy).
+
 ```bash
-cd mug-bot
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # requirements.txt + pytest
 cp .env.example .env        # fill token + channel ids + Torn/BSP keys (all live in this .env)
+pytest -q
 ```
+
+Locally, leaving `MUG_DB_PATH` blank is fine — the bot falls back to a `mug_bot.db` beside the code.
+On a server, always set it (see [Deploy](#deploy)).
 
 ## Track A — iterate on the embeds with mock data (no server needed)
 
@@ -105,109 +111,132 @@ channel subscription. The committed value belongs to the original author; set `w
 `market-tracker.user.js` to **your own** token. (Follow-up: pull it live from the page instead
 of hardcoding — see the plan.)
 
-## Deploy (Debian package)
+## Deploy
 
-The app ships as a `.deb` that installs to `/home/monchoon/torn/mug-bot` and runs as the
-`mug-bot` systemd service (enabled + started by the package's `postinst`).
+Deploys are **pull-based**: the server owns its own checkout and updates itself. Merge a PR to
+`main` and the box picks it up within five minutes. Nothing off the box holds credentials to it —
+which is why this is a cron pulling from GitHub rather than CI pushing over SSH.
 
-**One command (test → build → scp → install over SSH), from your dev machine:**
+(This replaces the old `.deb` pipeline. That pushed from a laptop, targeted a host that no longer
+exists, and could not be automated without giving GitHub Actions SSH access to the server.)
+
+### First time on a new box
 
 ```bash
-python packaging/release.py            # default: full deploy (prompts for your sudo password)
-python packaging/release.py --env      # also push your local .env (first deploy / .env changed)
-python packaging/release.py --no-install   # build + scp only; install it yourself
+sudo apt install -y python3-venv python3-pip git sqlite3
+git clone git@github.com:DobrowneyT/torn-mug-bot.git ~/torn/torn-mug-bot
+cd ~/torn/torn-mug-bot
+./deploy/provision.sh
 ```
 
-It runs the tests, builds the `.deb`, scps it to `/tmp` on the box, and `apt install --reinstall`s
-it over `ssh -t` — which restarts the service via the postinst. The DB and `.env` are preserved;
-new schema tables auto-create on restart.
+`provision.sh` is idempotent — re-run it any time. It creates `/var/lib/mug-bot`, builds `.venv`,
+seeds `.env` from `.env.example` (never clobbering an existing one), and generates
+`/etc/systemd/system/mug-bot.service` from **this box's** real user and paths. It deliberately does
+not do two things, and prints instructions for both: installing the deploy cron, and moving an
+existing database.
 
-(Lower-level scripts also exist: `packaging/build-deb.sh [ver]` and `packaging/deploy.sh [ver]`.)
+Then fill in `.env` — at minimum the Discord token, channel ids, `TORN_API_KEYS`, and:
 
-### The `.env` on the server
+```bash
+MUG_DB_PATH=/var/lib/mug-bot/mug_bot.db
+```
 
-Only the **server** needs `.env` (Discord token + channel ids + Torn/BSP keys). It lives at
-`/home/monchoon/torn/mug-bot/.env` and is **never** packaged. Two ways to provision it:
+**Set `MUG_DB_PATH` explicitly on a server.** If it is unset and `/var/lib/mug-bot` is not writable,
+the bot silently falls back to putting the database *inside the git checkout*, where `git clean` or a
+re-clone will destroy it.
 
-- **Edit in place (simplest):** the first install seeds `.env` from `.env.example`; then
-  `sudo nano /home/monchoon/torn/mug-bot/.env`, fill it in, `sudo systemctl restart mug-bot`.
-- **Push from your machine:** fill `mug-bot/.env` locally, then `python packaging/release.py --env`
-  copies it to the right path, fixes ownership, and restarts the service.
+```bash
+sudo systemctl start mug-bot
+journalctl -u mug-bot -f          # confirm it boots and the keys come up
+sudo ufw allow 3001/tcp           # inbound for the userscripts' POSTs
+```
 
-Notes:
-- The server needs internet at install time (postinst `pip install`s into the venv).
-- Open inbound TCP 3001 on the box: `sudo ufw allow 3001/tcp`.
-- **Persistent data:** the SQLite DB lives at `/var/lib/mug-bot/mug_bot.db` (created by the postinst),
-  **outside** the install dir, so reinstalls/upgrades never touch your watch list, keys, or captures.
-  `.env` (in the install dir) and the DB are never packaged, so both survive too. `apt purge` keeps
-  `/var/lib/mug-bot` as well — delete it by hand for a true clean slate.
-- **Schema migrations:** additive changes are automatic (`CREATE TABLE IF NOT EXISTS` + an
-  `ALTER TABLE … ADD COLUMN` pass in `db._ensure_columns`). A *breaking* change (renamed/retyped
-  column, data reshaping) needs a one-off migration step added to `db.init_db` before release —
-  note it in the changelog since the DB persists across versions.
+### Updating
 
-## Migrating to a new server (e.g. a Raspberry Pi 5)
+```bash
+./deploy/update.sh                # pull + deps + backup + restart + verify
+./deploy/update.sh --if-changed   # exit silently unless origin moved (what cron runs)
+SKIP_BACKUP=1 ./deploy/update.sh  # skip the pre-restart safety dump
+```
 
-Everything that matters lives in exactly two places, so a move is "copy two things":
+It takes a `flock` (a slow run can never be overlapped by the next cron tick), fast-forwards only
+(a server checkout must never invent merge commits), reinstalls dependencies **only** when
+`requirements.txt` changed, snapshots the database, restarts the service, and then polls `/health`
+until it answers — exiting non-zero, naming the `journalctl` command, if it never does.
+
+It **refuses to run on a dirty working tree**. If you have edited files on the server, it stops and
+lists them rather than merging over your changes.
+
+### Turning on auto-deploy
+
+Once you have watched a few manual runs, `crontab -e`:
+
+```
+*/5 * * * * /home/ubuntu/torn/torn-mug-bot/deploy/update.sh --if-changed >> /var/log/mug-bot-deploy.log 2>&1
+```
+
+The restart needs passwordless sudo — `provision.sh` checks this and prints the exact
+`/etc/sudoers.d/mug-bot` line if it is missing.
+
+Auto-deploy assumes `main` is protected and CI-gated, so only tested code ever reaches the box.
+
+### Backups
+
+Each deploy writes `mug_bot-<utc>-<sha>.db` next to the database under `backups/`, keeping the ten
+most recent. The `<sha>` is the version being *replaced*, so it names what you would roll back to.
+A failed backup warns but never blocks a deploy; a missing `sqlite3` binary warns loudly, because
+that silently disables the safety net.
+
+To roll back: `git checkout <sha>` in the checkout, `sudo systemctl restart mug-bot`, and restore a
+backup over `$MUG_DB_PATH` only if a schema change actually requires it.
+
+### What survives a deploy
+
+`.env` and the database. `.env` is gitignored; the database lives outside the checkout entirely.
+`git merge --ff-only` cannot touch either.
+
+**Schema migrations** are additive and automatic (`CREATE TABLE IF NOT EXISTS` plus an
+`ALTER TABLE … ADD COLUMN` pass in `db._ensure_columns`). A *breaking* change — a renamed or retyped
+column, reshaped data — needs a one-off migration step added to `db.init_db` before it is merged,
+since the database persists across deploys.
+
+## Moving to a new server
+
+Everything that matters is two files, so a move is "copy two things":
 
 | What | Where | Holds |
 |------|-------|-------|
-| `.env` | `/home/monchoon/torn/mug-bot/.env` | Discord token, channel ids, `TORN_API_KEYS`, BSP/TornStats keys |
-| SQLite DB | `/var/lib/mug-bot/mug_bot.db` | sellers, captures, sales, watch list, `config` settings, the `api_keys` pool |
+| `.env` | `<checkout>/.env` | Discord token, channel ids, `TORN_API_KEYS`, BSP/TornStats keys |
+| SQLite DB | `$MUG_DB_PATH` (`/var/lib/mug-bot/mug_bot.db`) | sellers, captures, sales, watch list, `config`, `api_keys` |
 
-(API keys live in **both** — `.env` seeds them on boot, the DB keeps each key's owner + enabled
-state. Copying both carries them fully.) The `.deb` is `Architecture: all` and builds its venv on
-the target with `pip`, so x86 → ARM (the Pi) just works — it only needs internet at install time.
+API keys live in both — `.env` seeds them on boot, the DB keeps each key's owner and enabled state.
 
-**1) On the OLD server — take clean, consistent copies:**
+**On the old box**, take consistent copies:
 
 ```bash
-sudo systemctl stop mug-bot                                          # quiesce writes / flush the WAL
-sudo sqlite3 /var/lib/mug-bot/mug_bot.db ".backup '/tmp/mug_bot.db'" # consistent single-file snapshot
-sudo cp /home/monchoon/torn/mug-bot/.env /tmp/mug-bot.env
-sudo chown monchoon:monchoon /tmp/mug_bot.db /tmp/mug-bot.env
-# done copying — restart the old box if you want it running until the Pi is live:
-sudo systemctl start mug-bot
-```
-
-**2) Pull them to your machine** (or scp straight to the Pi if it can reach the old box):
-
-```bash
-scp monchoon@<OLD_SERVER>:/tmp/mug_bot.db  ./mug_bot.db
-scp monchoon@<OLD_SERVER>:/tmp/mug-bot.env ./mug-bot.env
-```
-
-**3) On the NEW Pi — install the app first, then drop the data on top.** Installing first creates
-the dirs, venv and systemd service (and a placeholder `.env`); then you overwrite `.env` + the DB.
-
-```bash
-# from your dev machine — builds the .deb, scps it, installs over SSH (postinst builds the venv):
-python packaging/release.py --server monchoon@<PI_IP>
-
-# push your migrated files to the Pi:
-scp ./mug-bot.env monchoon@<PI_IP>:/tmp/mug-bot.env
-scp ./mug_bot.db  monchoon@<PI_IP>:/tmp/mug_bot.db
-```
-
-```bash
-# then on the Pi:
-ssh monchoon@<PI_IP>
 sudo systemctl stop mug-bot
-sudo cp /tmp/mug-bot.env /home/monchoon/torn/mug-bot/.env
-sudo cp /tmp/mug_bot.db  /var/lib/mug-bot/mug_bot.db
-sudo rm -f /var/lib/mug-bot/mug_bot.db-wal /var/lib/mug-bot/mug_bot.db-shm   # stale WAL sidecars
-sudo chown monchoon:monchoon /home/monchoon/torn/mug-bot/.env /var/lib/mug-bot/mug_bot.db
-sudo ufw allow 3001/tcp        # inbound port for the userscript POSTs
-sudo systemctl start mug-bot
-journalctl -u mug-bot -f       # confirm it boots + the keys come up
+sqlite3 /var/lib/mug-bot/mug_bot.db ".backup '/tmp/mug_bot.db'"   # folds in the WAL; do not just cp
+cp ~/torn/torn-mug-bot/.env /tmp/mug-bot.env
+sudo systemctl start mug-bot        # the old box can keep running until the new one is live
 ```
 
-**4) Repoint the userscripts** from the old IP to `http://<PI_IP>:3001` — `SERVER_URL` in
-`item-matcher.user.js` and the base URLs in `market-tracker.user.js`.
+**On the new box**, provision first (which creates the dirs, venv and unit), then drop the data on
+top:
 
-> Storage tip (Pi): put the DB on an **SSD**, not the SD card. The bot writes constantly; SD cards
-> are slow at random writes and wear out. The paths above assume the default — if you relocate the
-> DB, set `MUG_DB_PATH` in `.env` to the new file.
+```bash
+# after the "first time on a new box" steps above:
+sudo systemctl stop mug-bot
+cp /tmp/mug-bot.env ~/torn/torn-mug-bot/.env
+cp /tmp/mug_bot.db  /var/lib/mug-bot/mug_bot.db
+rm -f /var/lib/mug-bot/mug_bot.db-wal /var/lib/mug-bot/mug_bot.db-shm   # stale sidecars
+sqlite3 /var/lib/mug-bot/mug_bot.db "PRAGMA integrity_check;"          # expect: ok
+sudo systemctl start mug-bot
+```
+
+Finally, repoint the userscripts at the new address (see `userscripts/`).
+
+> Storage tip (Raspberry Pi): put the database on an **SSD**, not the SD card. The bot writes
+> constantly, and SD cards are slow at random writes and wear out.
 
 ## Resetting the database (fresh item / seller / gear data)
 
