@@ -1,0 +1,50 @@
+name: CI
+
+# Runs on every PR and on pushes to main. The point is the branch-protection rule, not this file:
+# the VPS pulls main automatically every 5 minutes (deploy/update.sh --if-changed), so an untested
+# merge is an unattended production outage. Require the `test` check on main.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to a PR supersedes the first — don't burn minutes on a run nobody will read.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Match the VPS. The suite runs in ~1s, so the dependency install dominates — hence the cache.
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest -q
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # deploy/ arrives with the pull-based deploy work; until then this job is a clean no-op rather
+      # than a red check. These scripts restart the live service, so they get linted.
+      - name: Lint deploy scripts
+        run: |
+          if ! compgen -G 'deploy/*.sh' > /dev/null; then
+            echo "no deploy/*.sh yet — nothing to lint"
+            exit 0
+          fi
+          shellcheck deploy/*.sh
