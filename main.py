@@ -59,9 +59,23 @@ async def _validate_keys_bg() -> None:
         log.exception("API key validation failed")
 
 
+async def _prune_raw_events_daily() -> None:
+    """Startup + daily retention pass. raw_events shares a database with the poller and the alert
+    path, so an unbounded Phase 0 catch-all table is not free."""
+    while True:
+        try:
+            removed = await db.prune_raw_events()
+            if removed:
+                log.info("pruned %d raw_events older than %d days", removed, config.RAW_RETENTION_DAYS)
+        except Exception:
+            log.exception("raw_events prune failed")
+        await asyncio.sleep(24 * 3600)
+
+
 async def amain() -> None:
     await db.init_db()
     log.info("SQLite ready at %s", db.db_path())
+    prune_task = asyncio.create_task(_prune_raw_events_daily())
 
     from server import keys as keypool
 
@@ -103,6 +117,7 @@ async def amain() -> None:
     try:
         await server.serve()
     finally:
+        prune_task.cancel()
         if poller_task is not None:
             poller_task.cancel()
         if bot is not None:
