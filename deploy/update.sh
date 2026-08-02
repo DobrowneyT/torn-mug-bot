@@ -66,7 +66,10 @@ main() {
   if [ "$local_sha" != "$remote_sha" ] \
      && git diff --name-only "$local_sha" "$remote_sha" | grep -qx 'requirements.txt'; then
     echo "==> requirements.txt changed — updating the venv"
-    "$repo_dir/.venv/bin/pip" install --quiet -r "$repo_dir/requirements.txt"
+    # `python -m pip` rather than `.venv/bin/pip`: console-script shebangs hardcode an absolute
+    # interpreter path, so they break if the checkout is ever renamed or moved, while the
+    # interpreter symlink keeps working. Running the module sidesteps that entirely.
+    "$repo_dir/.venv/bin/python" -m pip install --quiet -r "$repo_dir/requirements.txt"
   fi
 
   [ "${SKIP_BACKUP:-0}" = "1" ] || backup_db "$db_path"
