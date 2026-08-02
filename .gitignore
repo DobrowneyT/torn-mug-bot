@@ -3,8 +3,13 @@
 build/
 __pycache__/
 *.pyc
+# SQLite: the database, WAL-mode sidecars (-wal/-shm), the legacy rollback journal, and any
+# local backup suffix (mug_bot.db.pre-move.bak). *.db-journal alone predates WAL mode, so -wal
+# and -shm were left untracked — which made the working tree permanently dirty on any box whose
+# database lived in the checkout, and deploy/update.sh (rightly) refuses to deploy a dirty tree.
 *.db
-*.db-journal
+*.db-*
+*.db.*
 bot/state.json
 bot/state.json.*
 scratch/dumps/
