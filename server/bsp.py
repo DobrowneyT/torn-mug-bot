@@ -21,9 +21,10 @@ async def get_tbs(client: httpx.AsyncClient, user_id: int) -> Optional[Dict]:
         return None
     url = BSP_URL.format(key=config.BSP_API_KEY, user_id=user_id)
     try:
-        resp = await client.get(url, timeout=15, follow_redirects=True)
+        resp = await client.get(url, timeout=config.BSP_TIMEOUT_SECONDS, follow_redirects=True)
         data = resp.json()
     except (httpx.HTTPError, ValueError) as e:
+        # Includes the timeout. Callers render TBS as "unknown"; an alert must never wait on this.
         log.warning("BSP fetch failed for %s: %s", user_id, e)
         return None
     # Result 1/6 + TBS present => usable prediction (mirrors war-room handleFetchBspV2).

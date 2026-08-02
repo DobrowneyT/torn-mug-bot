@@ -150,6 +150,9 @@ async def on_sale(*, seller_id, item_id, item_name, qty, unit_price, listing_id=
     log.info("SALE detected: seller=%s item=%s(%s) qty=%s unit=%s total=%s listing=%s",
              seller_id, item_name, item_id, qty, unit_price,
              (qty or 0) * (unit_price or 0), listing_id)
+    # Detection-to-post latency was previously unmeasured, so any change here could only be argued
+    # rather than shown. Timed from the moment the sale is known; reported when the alert posts.
+    t0 = time.monotonic()
     async with _seller_lock(seller_id):
         sale_id = await db.record_sale(
             listing_id=listing_id, item_id=item_id, item_name=item_name,
@@ -161,7 +164,7 @@ async def on_sale(*, seller_id, item_id, item_name, qty, unit_price, listing_id=
         await _evaluate_alert(
             seller_id, seller, bot,
             last_item={"item_id": item_id, "item_name": item_name, "stats": stats},
-            sale_id=sale_id, listing_id=listing_id,
+            sale_id=sale_id, listing_id=listing_id, t0=t0,
         )
 
 
@@ -179,7 +182,7 @@ async def _mug_for(seller: Optional[Dict], total: int):
 
 
 async def _evaluate_alert(seller_id, seller: Optional[Dict], bot, last_item=None,
-                          sale_id=None, listing_id=None) -> None:
+                          sale_id=None, listing_id=None, t0=None) -> None:
     window = await _cfg("sale_window_seconds", config.SALE_WINDOW_SECONDS)
     win = await db.seller_window(seller_id, window)
     if win["total"] <= 0:
@@ -193,7 +196,9 @@ async def _evaluate_alert(seller_id, seller: Optional[Dict], bot, last_item=None
         return
     # Threshold crossed: NOW make a fresh API call for their current status (hospital/online) +
     # last_action + TBS. last_action drives the banking decay; status drives hold + embed colour.
+    _enrich_t = time.monotonic()
     seller = await enrich_seller(seller_id, _http(), force=True)
+    enrich_secs = time.monotonic() - _enrich_t
     # Delist guard for GEAR: if the seller acted right around when their item vanished, it's almost
     # certainly them pulling/relisting/trading it, not a buy. Drop the phantom sale so it neither
     # fires a $0 mug nor inflates the window.
@@ -262,7 +267,12 @@ async def _evaluate_alert(seller_id, seller: Optional[Dict], bot, last_item=None
                              hospitalize=hospitalize, protection_pct=protection_pct,
                              delist_active_secs=delist_secs)
         event["silent"] = silent
+        _post_t = time.monotonic()
         await bot.post_mug_alert(event)
+        if t0 is not None:
+            now = time.monotonic()
+            log.info("mug-alert seller=%s posted in %.2fs (enrich %.2fs, discord %.2fs)",
+                     seller_id, now - t0, enrich_secs, now - _post_t)
     await _mark_alerted(seller_id, win, claim=not (in_hospital and hosp_mode == "remind"))
 
 
