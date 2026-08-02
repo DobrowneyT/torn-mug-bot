@@ -55,6 +55,31 @@ _SELLER_FORWARD_COLS = {
 _db: Optional[aiosqlite.Connection] = None
 _db_path: Optional[str] = None
 
+# ---- hot-path caches -------------------------------------------------------------------------
+# These back lookups that ran once per item per poll, or once per scheduler tick, and re-read a
+# whole table every time. Measured at production sizes (1,639 anon uids, 196 watched items), the
+# anon set alone cost ~346ms per 60s cache cycle — all of it blocking the single aiosqlite worker
+# thread that the poller, the ingest routes and the alert path also queue on.
+#
+# Each cache has exactly ONE invalidation point, noted at its definition. Both are rebuilt lazily,
+# so a manual `DELETE FROM ...` against a STOPPED service (as the README documents for resets) is
+# picked up on the next start.
+_anon_uids: Optional[frozenset] = None          # invalidated by: mark_anon_uid
+_watchlist_targets: Optional[Dict[int, tuple]] = None   # invalidated by: _invalidate_watchlist()
+_gear_all_bonus: Optional[List[str]] = None     # invalidated by: set_config("gear_all_bonus")
+
+
+def _reset_caches() -> None:
+    global _anon_uids, _watchlist_targets, _gear_all_bonus
+    _anon_uids = None
+    _watchlist_targets = None
+    _gear_all_bonus = None
+
+
+def _invalidate_watchlist() -> None:
+    global _watchlist_targets
+    _watchlist_targets = None
+
 # Nesting depth of open batch() blocks. >0 => the per-helper _commit() calls are suppressed and a
 # single commit is issued when the outermost block exits.
 _batch_depth: int = 0
@@ -152,6 +177,7 @@ async def _scalar1(q: str, *args) -> int:
 
 async def init_db() -> aiosqlite.Connection:
     global _db, _db_path
+    _reset_caches()      # a different DB file must never inherit the previous one's cached rows
     _db_path = _resolve_db_path()
     _db = await aiosqlite.connect(_db_path)
     _db.row_factory = aiosqlite.Row
@@ -173,6 +199,7 @@ async def init_db() -> aiosqlite.Connection:
 
 async def close_db() -> None:
     global _db
+    _reset_caches()
     if _db is not None:
         await _db.close()
         _db = None
@@ -225,7 +252,7 @@ async def counts() -> Dict[str, int]:
         "gear": await _scalar1("SELECT COUNT(*) FROM listings WHERE is_gear=1 AND seller_id IS NOT NULL"),
         "unmatched": await _scalar1("SELECT COUNT(*) FROM unmatched_gear"),
         "unmatched_items": len(await unmatched_items()),
-        "anon": await _scalar1("SELECT COUNT(*) FROM anon_uids"),
+        "anon": len(await get_anon_uid_set()),
     }
 
 
@@ -271,12 +298,15 @@ async def get_config(key: str, default: Any = None) -> Any:
 
 
 async def set_config(key: str, value: Any) -> None:
+    global _gear_all_bonus
     await _db.execute(
         "INSERT INTO config(key, value) VALUES (?,?) "
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
         (key, json.dumps(value)),
     )
     await _commit()
+    if key == "gear_all_bonus":     # single invalidation point for the cached copy
+        _gear_all_bonus = None
 
 
 # ----------------------------- hospitalize factions -----------------------------------
@@ -459,6 +489,7 @@ async def unmatched_list(limit=25) -> List[Dict]:
 # ----------------------------------- anon uids ----------------------------------------
 
 async def mark_anon_uid(*, uid, item_name=None, stat=None, accuracy=None, price=None) -> None:
+    global _anon_uids
     await _db.execute(
         "INSERT INTO anon_uids(uid, item_name, stat, accuracy, price, seen_at) VALUES (?,?,?,?,?,?) "
         "ON CONFLICT(uid) DO UPDATE SET seen_at=excluded.seen_at",
@@ -466,11 +497,25 @@ async def mark_anon_uid(*, uid, item_name=None, stat=None, accuracy=None, price=
     )
     await _db.execute("DELETE FROM unmatched_gear WHERE uid=?", (str(uid),))
     await _commit()
+    if _anon_uids is not None:                 # the only writer — keep the cache in step
+        _anon_uids = _anon_uids | {str(uid)}
 
 
-async def get_anon_uid_set() -> set:
-    cur = await _db.execute("SELECT uid FROM anon_uids")
-    return {r[0] for r in await cur.fetchall()}
+async def get_anon_uid_set() -> frozenset:
+    """Every anonymous uid, cached in memory.
+
+    reconcile_gear asks this once per item per poll purely to answer "is this uid anonymous?", so at
+    production size it was re-reading 1,639 rows ~196 times a cycle (~346ms of the single DB
+    thread). The table only grows via mark_anon_uid, so it caches cleanly.
+
+    Returns a frozenset: immutable, so it can be handed out directly without copying per call and
+    without a caller being able to corrupt the cache.
+    """
+    global _anon_uids
+    if _anon_uids is None:
+        cur = await _db.execute("SELECT uid FROM anon_uids")
+        _anon_uids = frozenset(r[0] for r in await cur.fetchall())
+    return _anon_uids
 
 
 async def get_anon_gear_cache() -> List[Dict]:
@@ -736,12 +781,23 @@ async def delete_tracked_gear(uid) -> None:
 
 # ----------------------------- poll targets (gear + items) ----------------------------
 
+async def _watchlist_target_map() -> Dict[int, tuple]:
+    """{item_id: (is_gear, category)} for enabled items, cached. The poll loop asks for this every
+    POLL_TICK_SECONDS (1s), while it only changes on a /watch or /gearbonus command."""
+    global _watchlist_targets
+    if _watchlist_targets is None:
+        cur = await _db.execute("SELECT item_id, is_gear, category FROM watchlist WHERE enabled=1")
+        _watchlist_targets = {
+            r[0]: ((None if r[1] is None else bool(r[1])), r[2]) for r in await cur.fetchall()
+        }
+    return _watchlist_targets
+
+
 async def poll_targets() -> List[tuple]:
     """(item_id, is_gear-or-None, category) for every ENABLED watchlist item, optionally restricted
     to config.WATCH_ITEM_IDS. is_gear None => the poller detects it on first poll; category is the
     Torn type once known (used for the per-category 'all bonuses' override)."""
-    cur = await _db.execute("SELECT item_id, is_gear, category FROM watchlist WHERE enabled=1")
-    rows = [(r[0], (None if r[1] is None else bool(r[1])), r[2]) for r in await cur.fetchall()]
+    rows = [(iid, g, c) for iid, (g, c) in (await _watchlist_target_map()).items()]
     if config.WATCH_ITEM_IDS:
         rows = [t for t in rows if t[0] in config.WATCH_ITEM_IDS]
     return rows
@@ -749,8 +805,13 @@ async def poll_targets() -> List[tuple]:
 
 async def get_gear_all_bonus() -> List[str]:
     """Tokens (gear category names like 'Melee', or item-id strings) that should be polled with NO
-    bonus filter — i.e. capture EVERY listing, not just bonus ones. Editable via /gear allbonus."""
-    return [str(x) for x in (await get_config("gear_all_bonus", []) or [])]
+    bonus filter — i.e. capture EVERY listing, not just bonus ones. Editable via /gear allbonus.
+
+    Cached: read once per due-batch by the poller, changed only by a slash command."""
+    global _gear_all_bonus
+    if _gear_all_bonus is None:
+        _gear_all_bonus = [str(x) for x in (await get_config("gear_all_bonus", []) or [])]
+    return list(_gear_all_bonus)
 
 
 async def add_gear_all_bonus(token: str) -> List[str]:
@@ -781,6 +842,7 @@ async def watchlist_ensure(item_id, label=None, is_gear=None) -> None:
         (label, g, item_id),
     )
     await _commit()
+    _invalidate_watchlist()
 
 
 async def watchlist_add(item_id, label=None, enabled=True, is_gear=None) -> None:
@@ -793,11 +855,13 @@ async def watchlist_add(item_id, label=None, enabled=True, is_gear=None) -> None
         (item_id, label, g, 1 if enabled else 0, _now()),
     )
     await _commit()
+    _invalidate_watchlist()
 
 
 async def watchlist_remove(item_id) -> int:
     cur = await _db.execute("DELETE FROM watchlist WHERE item_id=?", (item_id,))
     await _commit()
+    _invalidate_watchlist()
     return cur.rowcount
 
 
@@ -814,6 +878,7 @@ async def watchlist_add_all(items) -> int:
         rows,
     )
     await _commit()
+    _invalidate_watchlist()
     return len(rows)
 
 
@@ -821,6 +886,7 @@ async def watchlist_clear() -> int:
     """Remove every watched item. Returns how many were removed."""
     cur = await _db.execute("DELETE FROM watchlist")
     await _commit()
+    _invalidate_watchlist()
     return cur.rowcount
 
 
@@ -832,21 +898,32 @@ async def watchlist_set_enabled(item_id, enabled) -> int:
         # Disabled items shouldn't keep cluttering the uncached list.
         await _db.execute("DELETE FROM unmatched_gear WHERE item_id=?", (item_id,))
     await _commit()
+    _invalidate_watchlist()
     return cur.rowcount
 
 
 async def watchlist_mark_polled(item_id, count, is_gear=None, category=None) -> None:
+    """Record a poll. is_gear/category are re-sent on every poll but are settled after the first
+    one, so they are written ONLY when they actually differ from what we already hold — which saves
+    two UPDATEs per item per poll and, just as importantly, avoids invalidating the poll-target
+    cache on every poll (which would make it useless)."""
     await _db.execute(
         "UPDATE watchlist SET last_polled_at=?, last_count=? WHERE item_id=?", (_now(), count, item_id)
     )
-    if is_gear is not None:
+    known = (await _watchlist_target_map()).get(item_id)
+    changed = False
+    if is_gear is not None and (known is None or known[0] != bool(is_gear)):
         await _db.execute(
             "UPDATE watchlist SET is_gear=? WHERE item_id=?", (1 if is_gear else 0, item_id)
         )
-    if category:
+        changed = True
+    if category and (known is None or known[1] != category):
         await _db.execute(
             "UPDATE watchlist SET category=? WHERE item_id=?", (category, item_id)
         )
+        changed = True
+    if changed:
+        _invalidate_watchlist()
     await _commit()
 
 
@@ -861,6 +938,7 @@ async def watchlist_remove_by_category(category) -> int:
     else:
         cur = await _db.execute("DELETE FROM watchlist WHERE category=?", (category,))
     await _commit()
+    _invalidate_watchlist()
     return cur.rowcount
 
 
@@ -880,6 +958,7 @@ async def watchlist_set_enabled_by_category(category, enabled) -> int:
     if not enabled:
         await _db.execute("DELETE FROM unmatched_gear")   # disabled items shouldn't linger uncached
     await _commit()
+    _invalidate_watchlist()
     return cur.rowcount
 
 
@@ -888,6 +967,7 @@ async def watchlist_set_all_enabled(enabled) -> int:
     if not enabled:
         await _db.execute("DELETE FROM unmatched_gear")
     await _commit()
+    _invalidate_watchlist()
     return cur.rowcount
 
 
