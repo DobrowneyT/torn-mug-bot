@@ -18,9 +18,24 @@ log = logging.getLogger("mug.deals")
 # How long the cached market values stay fresh before a re-fetch.
 VALUES_REFRESH_SECONDS = 4 * 60 * 60
 
-# item_id -> set of listing prices already alerted; pruned to what's still on the market so a
-# price that vanishes and reappears can alert again.
+# item_id -> set of listing prices already alerted; pruned to what's still on the market so a price
+# that vanishes and reappears can alert again.
+#
+# Mirrors the alerted_deals table. In memory so the hot path stays a set lookup rather than a query
+# per listing per poll; persisted because it used to be memory-ONLY, which meant every restart
+# re-alerted (and re-pinged for) every standing under-market listing. That was occasional before;
+# with auto-deploy restarting the bot on every merge, it would be routine.
 _alerted: dict = {}
+_loaded = False
+
+
+async def _alerted_prices(item_id) -> set:
+    """The already-alerted price set for an item, loading the table once on first use."""
+    global _loaded
+    if not _loaded:
+        _alerted.update(await db.get_alerted_deals())
+        _loaded = True
+    return _alerted.setdefault(item_id, set())
 
 
 async def maybe_refresh_values(client) -> bool:
@@ -57,10 +72,11 @@ async def check_item_deals(bot, item_id, listings, item_name=None, category=None
         seen_prices.add(price)
         if price > threshold:
             continue
-        already = _alerted.setdefault(item_id, set())
+        already = await _alerted_prices(item_id)
         if price in already:
             continue
         already.add(price)
+        await db.add_alerted_deal(item_id, price)
 
         amount = e.get("amount")
         discount = (market_value - price) / market_value * 100.0
@@ -80,6 +96,9 @@ async def check_item_deals(bot, item_id, listings, item_name=None, category=None
 
     # Forget prices that are no longer listed so they can re-alert if they come back cheap.
     if item_id in _alerted:
-        _alerted[item_id] &= seen_prices
+        stale = _alerted[item_id] - seen_prices
+        if stale:
+            _alerted[item_id] &= seen_prices
+            await db.drop_alerted_deals(item_id, _alerted[item_id])
         if not _alerted[item_id]:
             del _alerted[item_id]

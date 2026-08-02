@@ -352,6 +352,40 @@ async def remove_hospitalize_faction(fid: int) -> List[int]:
     return ids
 
 
+# ----------------------------- alerted deals (deal-finder) ----------------------------
+
+async def get_alerted_deals() -> Dict[int, set]:
+    """{item_id: {price, ...}} already announced. Loaded once at startup so a restart doesn't
+    re-alert every standing under-market listing."""
+    cur = await _db.execute("SELECT item_id, price FROM alerted_deals")
+    out: Dict[int, set] = {}
+    for r in await cur.fetchall():
+        out.setdefault(r[0], set()).add(r[1])
+    return out
+
+
+async def add_alerted_deal(item_id, price) -> None:
+    await _db.execute(
+        "INSERT OR IGNORE INTO alerted_deals(item_id, price, alerted_at) VALUES (?,?,?)",
+        (item_id, price, _now()),
+    )
+    await _commit()
+
+
+async def drop_alerted_deals(item_id, keep_prices) -> None:
+    """Forget alerted prices for this item that are no longer on the market, so a price that
+    vanishes and later returns cheap can alert again."""
+    if keep_prices:
+        placeholders = ",".join("?" for _ in keep_prices)
+        await _db.execute(
+            f"DELETE FROM alerted_deals WHERE item_id=? AND price NOT IN ({placeholders})",
+            (item_id, *keep_prices),
+        )
+    else:
+        await _db.execute("DELETE FROM alerted_deals WHERE item_id=?", (item_id,))
+    await _commit()
+
+
 # ----------------------------- item market values (deal-finder) -----------------------
 
 async def upsert_item_values(values: Dict[int, Dict]) -> None:
