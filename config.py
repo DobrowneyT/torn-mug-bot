@@ -163,6 +163,27 @@ ANONMATCH_MODE = (os.environ.get("MUG_ANONMATCH_MODE", "silent") or "silent").st
 # "the auction was won within the last week" — the 88-92% region.
 ANONMATCH_MIN_CONFIDENCE = float(os.environ.get("MUG_ANONMATCH_MIN_CONFIDENCE", "0.88"))
 
+# ---- Read API (the AH price-checker endpoint) ----
+# A SHARED TOKEN, sent as `Authorization: Bearer <token>`. Empty disables the API entirely, and
+# that is the default: an endpoint that publishes 548k rows of named players' purchase history
+# should be switched on deliberately, never by upgrading. Fail closed.
+#
+# It is a bearer token over plain HTTP, so treat it as "people I gave it to" rather than as
+# security — anyone on the path can read it. It stops casual discovery of the port, which is what
+# it is for. Rotate it by changing this and restarting.
+API_TOKEN = (os.environ.get("MUG_API_TOKEN") or "").strip()
+# Requests per minute per token+IP. A shared token leaks eventually; this bounds what that costs.
+API_RATE_PER_MIN = int(os.environ.get("MUG_API_RATE_PER_MIN", "60"))
+# Every request is logged here with its source IP — who used it, when, and what they asked for.
+API_ACCESS_LOG = os.environ.get("MUG_API_ACCESS_LOG", "/var/log/mug-bot-api.log")
+API_ACCESS_LOG_MAX_BYTES = int(os.environ.get("MUG_API_ACCESS_LOG_MAX_BYTES", str(10 * 1024 * 1024)))
+API_ACCESS_LOG_BACKUPS = int(os.environ.get("MUG_API_ACCESS_LOG_BACKUPS", "5"))
+# Only trust X-Forwarded-For when something you control actually sets it. Off by default because a
+# client can send that header itself: trusting it unconditionally means the access log records
+# whatever IP the caller felt like claiming, which is worse than no log at all.
+API_TRUST_PROXY = (os.environ.get("MUG_API_TRUST_PROXY", "false") or "").strip().lower() in (
+    "1", "true", "yes")
+
 # ---- Logging ----
 # Level for OUR loggers (mug.*). httpx/httpcore are pinned to WARNING regardless: they log the full
 # request URL, and the Torn key is a query parameter, so at INFO they write live credentials into

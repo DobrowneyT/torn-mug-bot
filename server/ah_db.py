@@ -85,9 +85,20 @@ def db_path() -> str:
     return _db_path or config.AH_DB_PATH
 
 
-async def init_db(path: Optional[str] = None) -> aiosqlite.Connection:
+async def init_db(path: Optional[str] = None, *, read_only: bool = False) -> aiosqlite.Connection:
+    """Open the ledger. `read_only` is for the BOT process.
+
+    The scraper (a cron process) owns this database and applies the schema; the bot only ever reads
+    it, to serve the search API. Opening read-only there is not politeness — it makes it impossible
+    for a bug on the request path to write to, migrate or lock the scraper's data, and it means the
+    two processes cannot fight over the write lock.
+    """
     global _db, _db_path
     _db_path = path or _resolve_db_path()
+    if read_only:
+        _db = await aiosqlite.connect(f"file:{_db_path}?mode=ro", uri=True)
+        _db.row_factory = aiosqlite.Row
+        return _db
     _db = await aiosqlite.connect(_db_path)
     _db.row_factory = aiosqlite.Row
     await _db.execute("PRAGMA synchronous = NORMAL")
@@ -254,7 +265,13 @@ async def rebuild_bonus_index(*, chunk: int = 20_000) -> Dict[str, int]:
             )
             indexed += len(payload)
         await _db.commit()
-    log.info("bonus index rebuilt: %d auction(s) scanned, %d bonus row(s)", scanned, indexed)
+    # Without stats SQLite guesses at index selectivity, and it guesses badly here: the two-bonus
+    # search measured 948ms before ANALYZE and 438ms after, on identical data. Cheap (0.3s at 560k
+    # rows) and it only needs redoing when the shape of the data changes, which a rebuild is.
+    await _db.execute("ANALYZE")
+    await _db.commit()
+    log.info("bonus index rebuilt: %d auction(s) scanned, %d bonus row(s); ANALYZE done",
+             scanned, indexed)
     return {"scanned": scanned, "indexed": indexed}
 
 
@@ -615,3 +632,132 @@ async def stats() -> Dict[str, Any]:
     row["backfill_complete"] = bool(await get_state("backfill_complete", False))
     row["last_runs"] = await recent_runs(5)
     return row
+
+
+# --------------------------------- search (the price-checker API) ----------------------
+
+# Whitelisted, because these interpolate into ORDER BY where a bind parameter cannot go. A caller
+# supplied string reaching that clause is a SQL injection; a lookup table makes it impossible rather
+# than merely unlikely.
+_SORT_COLUMNS = {"timestamp": "ended_at", "price": "price", "quality": "quality"}
+_SORT_ORDERS = {"asc": "ASC", "desc": "DESC"}
+
+SEARCH_MAX_LIMIT = 100
+# The result COUNT is capped rather than exact. An unbounded COUNT(*) over a growing table is a
+# scaling trap on a reachable endpoint — measured at 91ms for 373k matches, and that grows forever
+# while the page query does not. Capped it is 1ms. Callers get `total_capped` so a UI can render
+# "5,000+" instead of claiming a precise figure it was not given.
+SEARCH_COUNT_CAP = 5_000
+
+
+def _bonus_clause(ids, value_min, value_max, params: List) -> str:
+    """One clause per bonus the caller asked for, as an UNCORRELATED `IN` subquery.
+
+    The obvious spelling is `EXISTS (... WHERE b.auction_id = w.auction_id ...)`, and it is a trap.
+    Correlated, SQLite picks idx_auction_bonuses_lookup for the inner query and re-scans every row
+    matching the bonus+value window ONCE PER OUTER ROW — measured at 7.4 SECONDS over 20k auctions,
+    which on a reachable endpoint is a denial-of-service surface rather than a slow page.
+
+    `IN` is uncorrelated, so the matching auction set is built once and probed. Same 20k rows: 8ms.
+    It also keeps the property EXISTS was chosen for — `IN` deduplicates, so an item carrying the
+    same bonus twice still yields one result rather than inflating the page and the total.
+    """
+    if not ids:
+        return ""
+    placeholders = ",".join("?" * len(ids))
+    sql = (f" AND w.auction_id IN (SELECT b.auction_id FROM auction_bonuses b "
+           f"WHERE b.bonus_id IN ({placeholders})")
+    params.extend(int(i) for i in ids)
+    if value_min is not None:
+        # `b.value IS NOT NULL` is implied by the comparison, and that is deliberate: a bonus with
+        # no magnitude must not satisfy a range filter.
+        sql += " AND b.value >= ?"
+        params.append(float(value_min))
+    if value_max is not None:
+        sql += " AND b.value <= ?"
+        params.append(float(value_max))
+    return sql + ")"
+
+
+async def search_auctions(q: Dict[str, Any]) -> Dict[str, Any]:
+    """The price-checker query: completed sales matching an item and its bonus/quality profile.
+
+    Sold only. An auction that ended unsold has no clearing price, so including it would drag every
+    "what do these go for" answer toward nothing.
+    """
+    where = ["w.buyer_id IS NOT NULL"]
+    params: List[Any] = []
+
+    if q.get("item_name"):
+        where.append("w.item_name = ?")
+        params.append(str(q["item_name"]))
+    if q.get("item_id") is not None:
+        where.append("w.item_id = ?")
+        params.append(int(q["item_id"]))
+    if q.get("quality_min") is not None:
+        where.append("w.quality >= ?")
+        params.append(float(q["quality_min"]))
+    if q.get("quality_max") is not None:
+        where.append("w.quality <= ?")
+        params.append(float(q["quality_max"]))
+
+    clause = "".join(where and [" AND ".join(where)])
+    extra = ""
+    extra += _bonus_clause(q.get("bonus1_ids"), q.get("bonus1_value_min"),
+                           q.get("bonus1_value_max"), params)
+    extra += _bonus_clause(q.get("bonus2_ids"), q.get("bonus2_value_min"),
+                           q.get("bonus2_value_max"), params)
+
+    sort = _SORT_COLUMNS.get(str(q.get("sort_by") or "timestamp").lower(), "ended_at")
+    order = _SORT_ORDERS.get(str(q.get("sort_order") or "desc").lower(), "DESC")
+    limit = max(1, min(SEARCH_MAX_LIMIT, int(q.get("limit") or 20)))
+    offset = max(0, int(q.get("offset") or 0))
+
+    base = f"FROM auction_wins w WHERE {clause}{extra}"
+    cur = await _db.execute(
+        f"SELECT COUNT(*) FROM (SELECT 1 {base} LIMIT ?)", params + [SEARCH_COUNT_CAP])
+    total = int((await cur.fetchone())[0])
+
+    cur = await _db.execute(
+        f"SELECT w.* {base} ORDER BY w.{sort} {order} LIMIT ? OFFSET ?",
+        params + [limit, offset],
+    )
+    rows = [dict(r) for r in await cur.fetchall()]
+    return {"auctions": [_as_api_auction(r) for r in rows], "total": total,
+            "total_capped": total >= SEARCH_COUNT_CAP, "limit": limit, "offset": offset}
+
+
+def _as_api_auction(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Ledger row -> the shape the price-checker userscript already renders.
+
+    Deliberately reproduces the upstream Supabase field names rather than exposing ours, so the
+    script needs no changes below apiRequest().
+    """
+    bonuses = []
+    if row.get("bonuses"):
+        try:
+            for b in json.loads(row["bonuses"]) or []:
+                if isinstance(b, dict) and b.get("id") is not None:
+                    bonuses.append({"bonus_id": b["id"], "bonus_value": b.get("value"),
+                                    "bonus_title": b.get("title")})
+        except (ValueError, TypeError):
+            pass
+    return {
+        "auction_id": row["auction_id"],
+        "item_id": row["item_id"],
+        "item_name": row["item_name"],
+        "stat_quality": row["quality"],
+        "stat_damage": row["damage"],
+        "stat_accuracy": row["accuracy"],
+        "stat_armor": row["armor"],
+        "rarity": row["rarity"],
+        "bonus_values": bonuses,
+        "bonus_ids": [b["bonus_id"] for b in bonuses],
+        "seller_id": row["seller_id"],
+        "seller_name": row["seller_name"],
+        "buyer_id": row["buyer_id"],
+        "buyer_name": row["buyer_name"],
+        "price": row["price"],
+        "bids": row["bids"],
+        "timestamp": row["ended_at"],
+    }

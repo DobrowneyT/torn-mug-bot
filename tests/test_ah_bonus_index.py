@@ -201,7 +201,8 @@ def test_the_lookup_the_search_endpoint_will_make_is_indexed(tmp_path):
             "EXPLAIN QUERY PLAN SELECT auction_id FROM auction_bonuses "
             "WHERE bonus_id=? AND value BETWEEN ? AND ?", (86, 5, 9))
         plan = " ".join(str(r[3]) for r in await cur.fetchall())
-        assert "idx_auction_bonuses_lookup" in plan, f"query is not using the index: {plan}"
+        assert "idx_auction_bonuses_cover" in plan, f"query is not using the index: {plan}"
+        assert "COVERING" in plan, f"index is not covering, so it fetches every row: {plan}"
 
     _run(scenario, tmp_path, "l.db")
 
