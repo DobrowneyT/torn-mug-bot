@@ -311,6 +311,30 @@ async def recent_runs(limit: int = 10) -> List[Dict]:
     return [dict(r) for r in await cur.fetchall()]
 
 
+async def auctions_by_year(floor: int = 0) -> List[tuple]:
+    """(year, count), oldest first. The coverage-gap diagnostic.
+
+    A backwards walk that got derailed reports itself complete, so "complete" is not evidence that
+    nothing was skipped. A year with a plausible count either side of a year with none is — and no
+    other check we have makes that visible.
+
+    `floor` excludes undatable rows. A single 1970 row would otherwise stretch the axis across five
+    decades of empty years and bury the one gap that matters in noise.
+    """
+    cur = await _db.execute(
+        "SELECT CAST(strftime('%Y', ended_at, 'unixepoch') AS INTEGER) AS y, COUNT(*) "
+        "FROM auction_wins WHERE ended_at >= ? GROUP BY y ORDER BY y",
+        (floor,),
+    )
+    return [(r[0], r[1]) for r in await cur.fetchall()]
+
+
+async def count_undatable(floor: int) -> int:
+    """Rows stored with a timestamp Torn cannot have meant. Should be zero after the ingest guard;
+    non-zero means they predate it and are still poisoning MIN(ended_at)."""
+    return int(await _scalar1("SELECT COUNT(*) FROM auction_wins WHERE ended_at < ?", floor) or 0)
+
+
 async def stats() -> Dict[str, Any]:
     """Everything needed to answer "is the scraper healthy and how much have we got" in one call."""
     cur = await _db.execute(

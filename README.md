@@ -309,7 +309,18 @@ until it reports complete — it no-ops from then on:
 
 **How far back Torn will serve is not documented**, and the scraper discovers it rather than
 assuming: it walks backwards until a page comes back empty, records that history is complete, and
-`status` prints the span it reached. This also means the ledger may not be re-derivable later — if
+`status` prints the span it reached.
+
+Do not read "complete" as proof nothing was skipped — a walk that went wrong reports complete too.
+`status` prints a **per-year histogram** for exactly that reason: a year with nothing between two
+years with plenty is the only visible signature of a gap, and no other check makes it visible. If
+you see one, `backfill --restart` re-walks from the newest end. Inserts are idempotent, so a restart
+costs time and nothing else.
+
+Torn also serves some auctions with an epoch-adjacent timestamp — a real auction and a real buyer
+with an unusable date. Those are dropped at ingest (`MUG_AH_MIN_TIMESTAMP`): ownership is "most
+recent wins", so a win that cannot be placed in time is not evidence, and storing them breaks
+`MIN(ended_at)` — which is both the reported span and the floor a resumed backfill starts from. This also means the ledger may not be re-derivable later — if
 Torn's window is narrower than what you backfilled, re-running will not get that data back. Deploys
 snapshot `mug_ah.db` alongside the main database for that reason.
 
