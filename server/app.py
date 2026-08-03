@@ -17,9 +17,10 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 import config
-from server import db, detection
+from server import ah_db, api_access, db, detection
 
 log = logging.getLogger("mug.server")
 
@@ -139,6 +140,64 @@ def create_app(bot=None) -> FastAPI:
         path = os.path.join(DUMP_DIR, f"{source}-{time.strftime('%Y%m%d')}.jsonl")
         line = json.dumps({"_ts": int(time.time()), "payload": payload}) + "\n"
         await asyncio.to_thread(_write_dump, path, line)
+
+    # ----------------------------- read API -------------------------------
+    # Serves the AH ledger to the price-checker userscript. Behind a shared token, rate limited,
+    # and every request logged with its source IP. Disabled entirely when no token is configured.
+
+    async def _guard(request: Request, path: str):
+        """Returns an error response, or None to proceed. Logs either way."""
+        t0 = time.monotonic()
+        if not api_access.enabled():
+            api_access.record(request, path=path, status=503, detail="api-disabled")
+            return JSONResponse({"error": "API disabled"}, status_code=503)
+        if not api_access.authorise(request):
+            api_access.record(request, path=path, status=401, detail="bad-token")
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        if api_access.rate_limited(request):
+            api_access.record(request, path=path, status=429, detail="rate-limited",
+                              elapsed_ms=(time.monotonic() - t0) * 1000)
+            return JSONResponse({"error": "rate limited"}, status_code=429)
+        return None
+
+    @app.post("/api/auctions/search")
+    async def api_search(request: Request):
+        t0 = time.monotonic()
+        denied = await _guard(request, "/api/auctions/search")
+        if denied is not None:
+            return denied
+        try:
+            body = await request.json()
+        except (ValueError, TypeError):
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        try:
+            result = await ah_db.search_auctions(body)
+        except Exception:
+            log.exception("auction search failed for %r", body)
+            api_access.record(request, path="/api/auctions/search", status=500, detail="error",
+                              elapsed_ms=(time.monotonic() - t0) * 1000)
+            return JSONResponse({"error": "search failed"}, status_code=500)
+        api_access.record(
+            request, path="/api/auctions/search", status=200,
+            detail=f"item={body.get('item_name')!r} total={result['total']} n={len(result['auctions'])}",
+            elapsed_ms=(time.monotonic() - t0) * 1000,
+        )
+        return result
+
+    @app.get("/api/auctions/meta")
+    async def api_meta(request: Request):
+        """Coverage, so a caller can tell how much history it is querying and how fresh it is."""
+        t0 = time.monotonic()
+        denied = await _guard(request, "/api/auctions/meta")
+        if denied is not None:
+            return denied
+        meta = await ah_db.table_schema(ah_db.DATA_TABLE)
+        api_access.record(request, path="/api/auctions/meta", status=200,
+                          elapsed_ms=(time.monotonic() - t0) * 1000)
+        return {"rows": meta["row_count"], "coverage": meta["coverage"],
+                "max_limit": ah_db.SEARCH_MAX_LIMIT}
 
     @app.get("/health")
     async def health():

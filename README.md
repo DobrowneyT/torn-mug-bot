@@ -401,6 +401,51 @@ Two things it is careful about: a bonus with **no value** is stored NULL rather 
 satisfy a range filter and quietly widen a search; and the same bonus appearing twice on one item is
 kept as two rows (the primary key includes an ordinal) rather than collapsing.
 
+### Serving the ledger (the price-checker API)
+
+Off unless `MUG_API_TOKEN` is set — an endpoint publishing 548k rows of named players' purchase
+history should be switched on deliberately, never by upgrading. Fail closed.
+
+```bash
+python3 -c 'import secrets; print(secrets.token_urlsafe(32))'   # then put it in .env, restart
+```
+
+| route | |
+|---|---|
+| `POST /api/auctions/search` | the price-checker query: item, bonuses + value ranges, quality |
+| `GET /api/auctions/meta` | row count, coverage span, freshness, max page size |
+
+Both take `Authorization: Bearer <token>` (or an `apikey` header — the userscript already sends
+one). Every request is logged to `MUG_API_ACCESS_LOG` with its source IP, including the rejections,
+which are the ones worth having:
+
+```
+2026-08-03 12:04:11 ip=198.51.100.4 status=200 path=/api/auctions/search ua='Mozilla/5.0…' item='Sai' total=69 took=41ms
+2026-08-03 12:07:02 ip=192.0.2.7   status=401 path=/api/auctions/search ua='curl/8.5.0' bad-token took=0ms
+```
+
+The token is never written to that log. `X-Forwarded-For` is ignored unless `MUG_API_TRUST_PROXY`
+is on, because a client can send that header itself — trusting it by default would mean the log
+faithfully records whichever IP the caller chose to claim.
+
+Rate limited per token+IP (`MUG_API_RATE_PER_MIN`, default 60). A shared token leaks eventually;
+this bounds what that costs.
+
+The bot opens the ledger **read-only**. The scraper owns that file, and read-only means a bug on
+the request path cannot write to it, migrate it, or take its write lock.
+
+Measured over 560k auctions with a realistic spread (250 item names, 16 bonus types):
+
+| query | |
+|---|---|
+| item only | 4ms |
+| item + bonus + value range | 50ms |
+| two bonuses | 132ms |
+
+The result **count is capped** at 5,000 (`total_capped: true` says so). An unbounded `COUNT(*)`
+was 91ms and grows forever while the page query does not — on a reachable endpoint that is a
+scaling trap, not just a slow page.
+
 ### Using the ledger for other things
 
 `mug_ah.db` is standalone — no foreign keys into `mug_bot.db`, no application state beyond

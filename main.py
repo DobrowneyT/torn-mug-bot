@@ -103,6 +103,19 @@ async def amain() -> None:
         log.info("API gear poller enabled (DETECTION_MODE=%s)", config.DETECTION_MODE)
     log.info("Detection mode: %s", config.DETECTION_MODE)
 
+    # The read API serves the AH ledger, which lives in a separate file the SCRAPER owns. Opened
+    # read-only: a bug on the request path then cannot write to, migrate or lock the scraper's data,
+    # and the two processes can never contend for the write lock.
+    if config.API_TOKEN:
+        from server import ah_db
+        try:
+            await ah_db.init_db(read_only=True)
+            log.info("read API enabled — AH ledger (read-only) at %s", ah_db.db_path())
+        except Exception:
+            log.exception("could not open the AH ledger read-only — /api/auctions/* will fail")
+    else:
+        log.info("read API disabled (MUG_API_TOKEN not set)")
+
     app = create_app(bot)
     server = uvicorn.Server(
         uvicorn.Config(
@@ -128,6 +141,9 @@ async def amain() -> None:
             except Exception:
                 pass
         await db.close_db()
+        if config.API_TOKEN:
+            from server import ah_db
+            await ah_db.close_db()
 
 
 def main() -> None:
