@@ -482,6 +482,19 @@ the population being resolved — so the seller curve could plausibly be *better
 failed auction mostly means the item went somewhere invisible. Sharing one table between them would
 hide whichever it is.
 
+**Open question: are the no-buyer rows unsold, or still running?** The schema cannot tell them
+apart and they mean opposite things — an ended-unsold auction is historical evidence that decays,
+while a *running* one means the seller holds the item right now (the freshest evidence there is, but
+transient, and calling it "unsold" asserts an outcome that has not happened). Settle it with:
+
+```bash
+./.venv/bin/python ah_scrape.py probe --oldest --limit 20
+```
+
+Those rows sort at the old end, which is why `--oldest` exists. The probe reads `timestamp` and
+says which reading each row supports — a future date proves it is running, a real past date proves
+it ended.
+
 Seller-side inference is **off until it is measured**: `AH_SELLER_CONFIDENCE_BANDS` is `None`, and
 `None` means unsold rows are excluded from matching entirely. Filling it in from a real `calibrate`
 run is what turns the source on. Falling back to the buyer numbers would apply a curve measured on
