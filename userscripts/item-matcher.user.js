@@ -266,7 +266,7 @@
 
     // Consolidated: anon + regular gear now share ONE server/DB (the old split into a
     // separate :3002 anon server only existed because the original server was unavailable).
-    const SERVER_URL = 'http://5.161.91.183:3001';
+    const SERVER_URL = 'http://51.68.212.98:3001';
     const ANON_SERVER_URL = SERVER_URL;
 
     // DEBUG: when true, the script does NOT POST to the server. Instead it logs the raw
