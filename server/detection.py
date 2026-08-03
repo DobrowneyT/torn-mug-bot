@@ -234,6 +234,36 @@ async def _cfg(key, default):
     return await db.get_config(key, default)
 
 
+async def anon_match_decision(match: Optional[Dict]) -> Dict:
+    """Should an AH-inferred seller be alerted on, and should it ping? -> {use, silent, reason}.
+
+    The seller here was never observed — they won this uid at auction and nothing since says they
+    parted with it. That is a genuinely weaker claim than an item-matcher capture, so the two must
+    not look alike at a glance.
+
+    Measured accuracy by evidence age (13,090 comparisons against directly-observed sellers):
+    92.3% under a day, 88.0% within a week, 75.4% at 30-90d, 69.3% at 90-365d, 58.3% beyond.
+
+    The shape of that curve is why `ping` is confidence-gated rather than age-gated. There is no
+    cliff to cut at — old evidence is weaker, not worthless — so a hard age cutoff would throw away
+    thousands of usable matches to avoid a minority of wrong ones. Weighting keeps them and says how
+    much to trust each.
+    """
+    if not match:
+        return {"use": False, "silent": True, "reason": "no AH win for this uid"}
+    mode = (await _cfg("anonmatch_mode", config.ANONMATCH_MODE) or "silent").strip().lower()
+    if mode == "off":
+        return {"use": False, "silent": True, "reason": "anonmatch off"}
+    confidence = float(match.get("confidence") or 0.0)
+    if mode != "ping":
+        return {"use": True, "silent": True, "reason": f"mode={mode}"}
+    threshold = float(await _cfg("anonmatch_min_confidence", config.ANONMATCH_MIN_CONFIDENCE))
+    if confidence >= threshold:
+        return {"use": True, "silent": False, "reason": f"confidence {confidence:.2f} >= {threshold:.2f}"}
+    return {"use": True, "silent": True,
+            "reason": f"confidence {confidence:.2f} < {threshold:.2f} — posting without a ping"}
+
+
 async def _mug_for(seller: Optional[Dict], total: int):
     # mug % + clothing reduction are fixed (match the reference bot); only the threshold tunes.
     return mug.compute_mug(

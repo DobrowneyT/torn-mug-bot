@@ -134,6 +134,21 @@ AH_CONFIDENCE_BANDS = (
 # matching and from the turnover statistics, which it otherwise dominates.
 AH_MAX_UID_REUSE = int(os.environ.get("MUG_AH_MAX_UID_REUSE", "50"))
 
+# ---- Anon-match alerts (seller INFERRED from an AH win, not captured) ----
+#   off    - do not infer at all; an anonymous uid stays the dead end it is today
+#   silent - post the alert, never ping the role                                   (DEFAULT)
+#   ping   - ping, but only when the inference is strong enough (see below); weaker ones post silent
+#
+# Silent by default because an inferred seller is a weaker claim than a captured one, and a ping
+# that turns out wrong often enough trains you to ignore the channel — which costs more than the
+# alerts it would have carried. Turn it up once the top confidence band has demonstrably
+# outperformed the bottom one on live outcomes, not before.
+ANONMATCH_MODE = (os.environ.get("MUG_ANONMATCH_MODE", "silent") or "silent").strip().lower()
+# Under `ping`, only inferences at least this likely to be right actually ping. Defaults to the
+# measured accuracy of week-old evidence (AH_CONFIDENCE_BANDS), so out of the box a ping means
+# "the auction was won within the last week" — the 88-92% region.
+ANONMATCH_MIN_CONFIDENCE = float(os.environ.get("MUG_ANONMATCH_MIN_CONFIDENCE", "0.88"))
+
 # ---- Logging ----
 # Level for OUR loggers (mug.*). httpx/httpcore are pinned to WARNING regardless: they log the full
 # request URL, and the Torn key is a query parameter, so at INFO they write live credentials into

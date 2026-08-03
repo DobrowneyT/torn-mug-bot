@@ -84,7 +84,12 @@ def normalize(row: Dict) -> Optional[Dict]:
         # because uid is a Python `str` everywhere else in this codebase (api_poller normalises with
         # str(uid), reconcile_gear then classifies with `uid in tracked` / `in anon`). #12 adds an AH
         # lookup to that chain, and '123' != 123 in a Python set fails silently.
-        "uid": None if uid in (None, "") else str(uid),
+        # uid 0 means "this auction has no item uid" — confirmed live: a single uid=0 covering
+        # 49,435 auctions across 302 different item ids, i.e. every stackable Torn has ever
+        # auctioned. Stored as NULL, which is what it actually is. The AH_MAX_UID_REUSE backstop
+        # would also catch it, but only once it had accumulated enough rows to look pathological;
+        # this is exact, and it keeps 9% of the ledger from being stored at all.
+        "uid": None if uid in (None, "", 0, "0") else str(uid),
         "item_id": item.get("id"),
         "item_name": item.get("name"),
         "item_type": item.get("type"),

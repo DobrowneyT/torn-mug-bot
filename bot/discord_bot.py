@@ -556,6 +556,52 @@ class MugBot(discord.Client):
                 f"(`ping` = post+ping, `silent` = post no-ping, `off` = drop).",
                 ephemeral=True)
 
+        # ----------------------------- /anonmatch -------------------------
+        # Anonymous listings whose seller is INFERRED from an auction-house win rather than captured
+        # by the item-matcher. Weaker evidence than a capture, so it gets its own mode and its own
+        # confidence gate.
+        @self.tree.command(
+            name="anonmatch",
+            description="Configure anon-match alerts (seller inferred from an AH win)")
+        @app_commands.describe(
+            mode="How to post an alert whose seller was inferred rather than captured",
+            min_confidence="Under `ping`, only inferences at least this likely to be right actually "
+                           "ping (0-1). Weaker ones still post, silently.")
+        @app_commands.choices(mode=[
+            app_commands.Choice(name="silent — post but DON'T ping the role (default)", value="silent"),
+            app_commands.Choice(name="ping — ping when confidence clears the threshold", value="ping"),
+            app_commands.Choice(name="off — don't infer at all (anon uids stay a dead end)", value="off"),
+        ])
+        async def anonmatch(interaction: discord.Interaction,
+                            mode: Optional[app_commands.Choice[str]] = None,
+                            min_confidence: Optional[float] = None):
+            changed = []
+            if min_confidence is not None:
+                if not 0.0 <= min_confidence <= 1.0:
+                    await interaction.response.send_message(
+                        "min_confidence must be between 0 and 1.", ephemeral=True)
+                    return
+                await db.set_config("anonmatch_min_confidence", min_confidence)
+                changed.append(f"min confidence → **{min_confidence:.2f}**")
+            if mode is not None:
+                await db.set_config("anonmatch_mode", mode.value)
+                changed.append(f"mode → **{mode.value}**")
+            cur_mode = await db.get_config("anonmatch_mode", config.ANONMATCH_MODE)
+            cur_conf = float(await db.get_config(
+                "anonmatch_min_confidence", config.ANONMATCH_MIN_CONFIDENCE))
+            summary = await db.anon_match_summary()
+            head = ("✅ " + ", ".join(changed) + "\n") if changed else ""
+            n = summary.get("n") or 0
+            resolved = (f"**{n:,}** uid(s) currently resolved from the auction house, "
+                        f"**{summary.get('high_confidence') or 0:,}** of them above the ping bar."
+                        if n else "No uids resolved yet — has `ah_scrape.py match` run?")
+            await interaction.response.send_message(
+                f"{head}🕵️ Anon-match mode: **{cur_mode}** · ping at confidence ≥ **{cur_conf:.2f}**\n"
+                f"{resolved}\n"
+                f"*Confidence is measured, not guessed: it is how often an AH-inferred owner turned "
+                f"out to be the actual seller for evidence that old. See `ah_scrape.py calibrate`.*",
+                ephemeral=True)
+
         # ----------------------------- /hosplock --------------------------
         # How a sale by an in-hospital seller is alerted. All params optional.
         @self.tree.command(
@@ -615,6 +661,10 @@ class MugBot(discord.Client):
             lines.append(
                 "*De-lists:* `/delist mode:ping|silent|off` — `silent` posts without pinging, `off` "
                 "drops likely self-pulls entirely; `/delist seconds:<n>` sets the detection buffer.")
+            lines.append(
+                "*Anon matches:* `/anonmatch mode:silent|ping|off` — sellers INFERRED from an "
+                "auction-house win rather than captured. `silent` (default) posts without pinging; "
+                "`ping` pings only above `min_confidence`, which is measured accuracy, not a guess.")
             lines.append(
                 "*Hospital:* `/hosplock mode:live|remind|hold` — `live` posts immediately with a "
                 "countdown, `remind` also re-posts near release, `hold` waits; `lead_minutes` sets "
