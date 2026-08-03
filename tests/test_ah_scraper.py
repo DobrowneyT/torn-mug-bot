@@ -279,9 +279,11 @@ def test_backfill_does_not_skip_auctions_sharing_the_boundary_second(tmp_path, m
     the page, inclusively — so a page boundary falling in the middle of a second is normal. Stepping
     to oldest-1 would drop the rest of that second, permanently and with nothing to show for it."""
     # three auctions settle in the same second, and a page boundary cuts through them
-    rows = [_api_row(1, 3000, uid=1), _api_row(2, 2000, uid=2),
-            _api_row(3, 2000, uid=3), _api_row(4, 2000, uid=4),
-            _api_row(5, 1000, uid=5)]
+    # timestamps must clear config.AH_MIN_TIMESTAMP or they are dropped as undatable
+    base = 1_700_000_000
+    rows = [_api_row(1, base + 3, uid=1), _api_row(2, base + 2, uid=2),
+            _api_row(3, base + 2, uid=3), _api_row(4, base + 2, uid=4),
+            _api_row(5, base + 1, uid=5)]
     api = _FakeApi(rows)
     api.install(monkeypatch)
     _no_sleep(monkeypatch)
@@ -291,7 +293,7 @@ def test_backfill_does_not_skip_auctions_sharing_the_boundary_second(tmp_path, m
         stored = await ah_db.count_auctions()
         assert stored == 5, f"lost {5 - stored} auction(s) at the page boundary"
         assert result["complete"] is True
-        assert api.calls[1]["to"] == 2000, "boundary must be re-requested, not stepped over"
+        assert api.calls[1]["to"] == base + 2, "boundary must be re-requested, not stepped over"
 
     _run(scenario, tmp_path)
 
@@ -299,7 +301,8 @@ def test_backfill_does_not_skip_auctions_sharing_the_boundary_second(tmp_path, m
 def test_backfill_steps_below_a_second_it_cannot_page_off(tmp_path, monkeypatch):
     """The cost of an inclusive bound: a FULL page entirely within one second cannot advance.
     Losing that second beats abandoning the rest of history — but it must not stall."""
-    rows = [_api_row(i + 1, 2000, uid=i) for i in range(3)] + [_api_row(9, 1000, uid=9)]
+    base = 1_700_000_000
+    rows = [_api_row(i + 1, base + 2, uid=i) for i in range(3)] + [_api_row(9, base + 1, uid=9)]
     api = _FakeApi(rows)
     api.install(monkeypatch)
     _no_sleep(monkeypatch)

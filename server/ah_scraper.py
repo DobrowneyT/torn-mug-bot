@@ -63,6 +63,12 @@ def normalize(row: Dict) -> Optional[Dict]:
     ended_at = row.get("timestamp")
     if not buyer_id or not auction_id or not ended_at:
         return None
+    # Torn serves some rows with an epoch-adjacent timestamp — real auction, real buyer, unusable
+    # date. Dropped rather than stored: ownership is "most recent wins" and confidence is a function
+    # of evidence age, so a win that cannot be placed in time is not evidence. Storing it would also
+    # wreck MIN(ended_at), which is the backfill's own floor.
+    if int(ended_at) < config.AH_MIN_TIMESTAMP:
+        return None
 
     item = row.get("item") or {}
     stats = item.get("stats") or {}
@@ -98,13 +104,26 @@ def normalize(row: Dict) -> Optional[Dict]:
 
 
 def _timestamps(raw: List[Dict]) -> List[int]:
-    """End timestamps from the RAW page, not the normalised one.
+    """PLAUSIBLE end timestamps from the RAW page, not the normalised one.
 
-    The cursor has to advance over rows we chose not to store (an unsold auction, say) as well as
-    ones we kept. Deriving it from the normalised rows would stall the walk on any page whose
-    boundary row was dropped, and re-request that page forever.
+    Raw, because the cursor has to advance over rows we chose not to store (an unsold auction, say)
+    as well as ones we kept — deriving it from normalised rows would stall the walk on any page
+    whose boundary row was dropped, and re-request that page forever.
+
+    Plausible, because Torn serves some auctions with an epoch-adjacent timestamp and the backfill
+    bounds its next request on the OLDEST value it saw — so one such row drags the cursor to 1970.
+
+    Measured honestly: on today's API that costs wasted requests, NOT data. Torn sorts DESC by
+    timestamp, so epoch rows come after every datable auction and there is nothing left below them
+    to skip (simulated against the real walk: two requests at `to=72` and `to=23`, zero rows lost).
+    The guard stays because that safety rests entirely on an ordering guarantee Torn never made, and
+    the failure if it ever changed would be silent.
+
+    An empty list here means the page held no datable auction at all — genuinely the end of usable
+    history.
     """
-    return [int(r["timestamp"]) for r in raw if r.get("timestamp")]
+    return [int(r["timestamp"]) for r in raw
+            if r.get("timestamp") and int(r["timestamp"]) >= config.AH_MIN_TIMESTAMP]
 
 
 async def _fetch(client: httpx.AsyncClient, **kwargs) -> List[Dict]:
@@ -175,8 +194,8 @@ async def scrape_forward(client: httpx.AsyncClient, *, limit: Optional[int] = No
 # --------------------------------- backfill --------------------------------------------
 
 async def scrape_backfill(client: httpx.AsyncClient, *, limit: Optional[int] = None,
-                          max_pages: Optional[int] = None,
-                          max_seconds: Optional[float] = None) -> Dict:
+                          max_pages: Optional[int] = None, max_seconds: Optional[float] = None,
+                          restart: bool = False) -> Dict:
     """Walk backwards from the oldest auction we hold until Torn stops returning rows.
 
     How far back the API will actually serve is not documented, and Torn has capped these windows
@@ -192,12 +211,22 @@ async def scrape_backfill(client: httpx.AsyncClient, *, limit: Optional[int] = N
     budget = config.AH_MAX_SECONDS_PER_RUN if max_seconds is None else max_seconds
     started = time.monotonic()
 
-    if await ah_db.get_state("backfill_complete", False):
+    if restart:
+        # Re-walk from the newest end. Inserts are idempotent, so this costs time and nothing else —
+        # which is what makes it the right answer whenever there is doubt about whether a previous
+        # walk was complete rather than merely finished.
+        log.info("ah backfill: --restart, re-walking from the newest end")
+        await ah_db.set_state("backfill_complete", False)
+
+    if not restart and await ah_db.get_state("backfill_complete", False):
         floor = await ah_db.oldest_ended_at()
         log.info("ah backfill: already complete (history reaches back to %s)", _fmt_ts(floor))
         return {"mode": "backfill", "pages": 0, "seen": 0, "stored": 0, "new": 0, "complete": True}
 
-    to_ts = await ah_db.oldest_ended_at()
+    # A restart starts from the newest end rather than resuming at the floor — resuming is what a
+    # normal run does, and the point of a restart is to re-cover ground a previous walk may have
+    # jumped over.
+    to_ts = None if restart else await ah_db.oldest_ended_at()
     pages = seen = stored = new = 0
     complete = False
     stopped = "page cap"
@@ -221,6 +250,10 @@ async def scrape_backfill(client: httpx.AsyncClient, *, limit: Optional[int] = N
 
         oldest = min(_timestamps(raw), default=None)
         if oldest is None:
+            # A full page and not one datable auction on it — we are past the end of usable history
+            # and into Torn's epoch-timestamped rows. That is the real floor.
+            log.info("ah backfill: page held no datable auction — end of usable history")
+            complete = True
             break
         if len(raw) < limit:
             complete = True
@@ -280,7 +313,7 @@ async def probe(client: httpx.AsyncClient, *, limit: int = 3) -> None:
 # --------------------------------- orchestration ---------------------------------------
 
 async def run(mode: str, *, limit: Optional[int] = None, max_pages: Optional[int] = None,
-              max_seconds: Optional[float] = None) -> Dict:
+              max_seconds: Optional[float] = None, restart: bool = False) -> Dict:
     """One scrape run, wrapped in an ah_runs record.
 
     The run log exists because nobody watches a scraper. Alerts stopping is noticed within minutes;
@@ -295,7 +328,7 @@ async def run(mode: str, *, limit: Optional[int] = None, max_pages: Optional[int
                 result = await scrape_forward(client, limit=limit, max_pages=max_pages)
             elif mode == "backfill":
                 result = await scrape_backfill(client, limit=limit, max_pages=max_pages,
-                                               max_seconds=max_seconds)
+                                               max_seconds=max_seconds, restart=restart)
             else:
                 raise ValueError(f"unknown scrape mode {mode!r}")
     except Exception as exc:
@@ -326,6 +359,29 @@ async def show_status() -> None:
         state = r["error"] or ("ok" if r["ended_at"] else "DIED MID-RUN")
         print(f"  {_fmt_ts(r['started_at'])}  {r['mode']:<8} pages={r['pages']:<3} "
               f"new={r['rows_new']:<5} {state}")
+
+    bad = await ah_db.count_undatable(config.AH_MIN_TIMESTAMP)
+    if bad:
+        print()
+        print(f"WARNING: {bad:,} row(s) have a timestamp before {_fmt_ts(config.AH_MIN_TIMESTAMP)}.")
+        print("  Torn serves some auctions with an epoch-adjacent date. They are dropped at ingest")
+        print("  now, but rows stored before that guard existed still break MIN(ended_at) — which is")
+        print("  the backfill's own floor, and the 'covering' span above. Remove them with:")
+        print(f"    sqlite3 {ah_db.db_path()} "
+              f"'DELETE FROM auction_wins WHERE ended_at < {config.AH_MIN_TIMESTAMP};'")
+
+    years = await ah_db.auctions_by_year(config.AH_MIN_TIMESTAMP)
+    if len(years) > 1:
+        print()
+        print("auctions per year — a year with none between two with plenty means the backfill")
+        print("skipped ground. 'complete' does not rule that out; only this does.")
+        peak = max(c for _, c in years) or 1
+        seen_years = {y for y, _ in years}
+        for year in range(min(seen_years), max(seen_years) + 1):
+            count = dict(years).get(year, 0)
+            bar = "#" * int(40 * count / peak)
+            flag = "   <-- GAP" if count == 0 else ""
+            print(f"  {year}  {count:>8,}  {bar}{flag}")
 
 
 async def show_coverage() -> None:
@@ -469,6 +525,9 @@ async def cli(argv=None) -> int:
                    nargs="?", default="forward")
     p.add_argument("--limit", type=int, default=None, help="rows per request (max 100)")
     p.add_argument("--max-pages", type=int, default=None, help="cap requests for this run")
+    p.add_argument("--restart", action="store_true",
+                   help="backfill: clear the completed flag and re-walk from the newest end. "
+                        "Inserts are idempotent, so this costs time and nothing else.")
     p.add_argument("--max-seconds", type=float, default=None,
                    help="wall-clock budget for a backfill run; 0 = unbounded (default %s)"
                         % config.AH_MAX_SECONDS_PER_RUN)
@@ -503,7 +562,7 @@ async def cli(argv=None) -> int:
                     await probe(client, limit=args.limit or 3)
                 return 0
             result = await run(args.mode, limit=args.limit, max_pages=args.max_pages,
-                               max_seconds=args.max_seconds)
+                               max_seconds=args.max_seconds, restart=args.restart)
             print(json.dumps(result))
         finally:
             await db.close_db()

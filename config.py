@@ -104,6 +104,16 @@ AH_OVERLAP_SECONDS = int(os.environ.get("MUG_AH_OVERLAP_SECONDS", "5"))
 # that empties the bucket in a burst leaves the poller starved for the next minute — and the poller
 # is the one on the alert path. Spacing the scrape out costs nothing it cares about.
 AH_PAGE_DELAY_SECONDS = float(os.environ.get("MUG_AH_PAGE_DELAY", "0.5"))
+# Torn serves some auctions with an epoch-adjacent `timestamp` (values in the single digits). Those
+# rows are real auctions with a real uid and buyer, but an unusable date — and a date is not
+# optional here: the whole ownership model is "most recent wins", and #44's confidence is a function
+# of evidence age. A win we cannot place in time is not evidence.
+#
+# Worse, one such row on a page DERAILS THE BACKFILL. The walk bounds the next request on the oldest
+# timestamp it saw, so a single epoch row drags the cursor from (say) 2013 to 1970 and every auction
+# in between is skipped — silently, and the walk then reports itself complete. So the floor guards
+# the cursor as well as the data. 2004 is when Torn launched; nothing before it can be genuine.
+AH_MIN_TIMESTAMP = int(os.environ.get("MUG_AH_MIN_TIMESTAMP", "1072915200"))   # 2004-01-01Z
 
 # ---- Logging ----
 # Level for OUR loggers (mug.*). httpx/httpcore are pinned to WARNING regardless: they log the full
