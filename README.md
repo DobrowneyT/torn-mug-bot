@@ -262,6 +262,7 @@ with alerts.
 ./.venv/bin/python ah_scrape.py status      # how much have we got, and did the last run work
 ./.venv/bin/python ah_scrape.py forward     # pull newly-completed auctions (this is the cron job)
 ./.venv/bin/python ah_scrape.py backfill    # walk history backwards; resumable, run until complete
+./.venv/bin/python ah_scrape.py coverage    # how much of the anon backlog the ledger can resolve
 ./.venv/bin/python ah_scrape.py probe       # print raw API rows, store nothing
 ```
 
@@ -335,6 +336,28 @@ which is a no-op insert.
 
 Unlike `forward`, it is bounded by wall clock rather than page count — the length of a history
 download is precisely the number we are trying to measure, so capping pages would mean guessing it.
+
+### Is the ledger worth anything? (`coverage`)
+
+```
+anon uids        412 of 1,639 resolve (25.1%)   the dead end #12 exists to open up
+                   evidence age: median 23d, 88 within a week, oldest 340d
+unmatched gear    31 of 96 resolve (32.3%)      on the market, no seller captured yet
+tracked gear      74 of 210 resolve (35.2%)     already attributed — a cross-check, not a target
+uid turnover:     {'seen_1x': 78412, 'seen_2x': 1204, 'seen_3x': 61}
+                  1,265 uid(s) auctioned more than once, median 47.0d apart
+```
+
+Reads both databases and makes no API calls. Three things to read off it:
+
+- **the anon line is the ceiling on #12.** An anonymous uid with no AH win behaves exactly as it
+  does today, so this is the fraction of the dead-end backlog that could ever produce an alert.
+- **the tracked line is a sanity check, not a target.** Those uids already have a captured seller,
+  so if the AH-inferred buyer disagrees with the captured seller on many of them, the inference is
+  weaker than it looks — a cheap way to catch that before trusting it.
+- **turnover sets the staleness cutoff.** If uids typically change hands every few weeks, a
+  months-old win is not evidence of current ownership. That number is what a confidence threshold
+  should be derived from rather than picked.
 
 ## Moving to a new server
 
