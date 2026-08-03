@@ -428,8 +428,28 @@ The token is never written to that log. `X-Forwarded-For` is ignored unless `MUG
 is on, because a client can send that header itself — trusting it by default would mean the log
 faithfully records whichever IP the caller chose to claim.
 
+`/var/log` is root-owned, and the service does not run as root — so the file has to exist and be
+writable by the service user before it can be used. Create it once:
+
+```bash
+sudo install -o ubuntu -g ubuntu -m 640 /dev/null /var/log/mug-bot-api.log
+sudo systemctl restart mug-bot          # the handler is opened at startup
+```
+
+Skipping this is not fatal: the records fall back to the service journal with a warning saying
+where they went, which is worth more than a silently missing access log. But they are then mixed in
+with everything else, which is exactly the thing a separate access log is for.
+
 Rate limited per token+IP (`MUG_API_RATE_PER_MIN`, default 60). A shared token leaks eventually;
 this bounds what that costs.
+
+**It is plain HTTP.** The token, the queries and the results all cross the network in the clear, so
+anyone on the path can read the token and then use it. That is a considered trade rather than an
+oversight — the token grants read-only access to auction history that is public in-game anyway — but
+it does mean this token should never be reused for anything else, and rotating it is a `.env` edit
+and a restart. Putting a reverse proxy with a certificate in front (which needs a domain name, not
+just the IP) closes it; set `MUG_API_TRUST_PROXY=true` at the same time so the log keeps recording
+real client IPs.
 
 The bot opens the ledger **read-only**. The scraper owns that file, and read-only means a bug on
 the request path cannot write to it, migrate it, or take its write lock.
@@ -445,6 +465,38 @@ Measured over 560k auctions with a realistic spread (250 item names, 16 bonus ty
 The result **count is capped** at 5,000 (`total_capped: true` says so). An unbounded `COUNT(*)`
 was 91ms and grows forever while the page query does not — on a reachable endpoint that is a
 scaling trap, not just a slow page.
+
+### The price-checker userscript
+
+`userscripts/ah-price-checker.user.js` is **WinterValor [3945658]'s** script, MIT licensed, with one
+thing changed: the search reads from this ledger instead of the author's Supabase backend. The
+licence header and authorship are kept intact, and everything below `apiRequest()` is untouched —
+the server deliberately answers in the field names the script already renders (`stat_quality`,
+`bonus_values`, `timestamp`, …), so there was nothing else to change.
+
+Install it, then on the first search it asks for the server address and token:
+
+```
+Address of your mug-bot AH ledger.        →  http://<host>:3001
+API token for http://<host>:3001          →  the MUG_API_TOKEN from .env
+```
+
+Both go into the userscript manager's storage, **not** into the file — so the address can move
+without editing the script, and the token does not sit in a file you might paste somewhere. Leaving
+either prompt blank keeps the original public backend. The footer says which one answered:
+
+```
+1,284 results   via 51.68.212.98:3001
+```
+
+That indicator is there because the previous userscript in this project had its address baked in,
+and when the host moved it went on posting into the void with nothing on screen to say so. It is
+also the switch: click it to reconfigure or fall back. There is no *automatic* fallback, deliberately
+— "my server is down" and "there were no sales" must not look identical, since the whole point of
+querying your own ledger is knowing where the answer came from.
+
+A custom host that isn't the default will make the userscript manager ask permission to connect to
+it once (`@connect` lists only the default). Allow it.
 
 ### Using the ledger for other things
 
