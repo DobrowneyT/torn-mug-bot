@@ -13,6 +13,8 @@ Runs as a cron process, not inside the bot. Two modes:
             should be derived from. Reads both databases; makes no API calls.
   match     resolve every un-attributed uid against the ledger and write the result into the MAIN
             database, with a measured confidence. Runs automatically after `forward`.
+  schema    machine-readable JSON schema of the ledger, with per-column semantics. For building
+            things that read this database from outside.
 
 Both are resumable: forward is capped by page count (catching up should never be large), backfill
 by wall clock (its length is exactly what we are trying to measure). An interrupted run loses
@@ -656,6 +658,26 @@ async def show_calibration() -> None:
     print("listed, but it does mean these numbers describe items that move.")
 
 
+async def show_schema(all_tables: bool = False) -> None:
+    """Machine-readable schema for the ledger, as JSON on stdout.
+
+    Defaults to `auction_wins` alone. The other two tables are scraper bookkeeping and contain
+    nothing Torn said, so an external consumer wants neither — and freshness, the one operational
+    thing worth exposing, is derivable from the data table itself as MAX(seen_at).
+
+    Ships the column SEMANTICS alongside the types, because that is what a PRAGMA cannot tell you:
+    a NULL `buyer_id` means "ended unsold" and a NULL `uid` means "this item has none", and an
+    endpoint built without knowing that will produce confidently wrong aggregates.
+    """
+    tables = await ah_db.table_names() if all_tables else [ah_db.DATA_TABLE]
+    out = {
+        "database": ah_db.db_path(),
+        "source": "Torn API v2 /market/auctionhouse — completed auctions, stored verbatim",
+        "tables": [await ah_db.table_schema(t) for t in tables],
+    }
+    print(json.dumps(out, indent=2))
+
+
 async def cli(argv=None) -> int:
     """Entry point. Assumes .env is already loaded — see ah_scrape.py at the repo root."""
     from server import db
@@ -664,12 +686,14 @@ async def cli(argv=None) -> int:
     p = argparse.ArgumentParser(prog="ah_scrape", description="Torn auction house scraper")
     p.add_argument("mode",
                    choices=["forward", "backfill", "probe", "status", "coverage", "calibrate",
-                            "match"],
+                            "match", "schema"],
                    nargs="?", default="forward")
     p.add_argument("--no-match", action="store_true",
                    help="forward: skip the match step that normally follows the scrape")
     p.add_argument("--limit", type=int, default=None, help="rows per request (max 100)")
     p.add_argument("--max-pages", type=int, default=None, help="cap requests for this run")
+    p.add_argument("--all-tables", action="store_true",
+                   help="schema: include the scraper's bookkeeping tables, not just the data one")
     p.add_argument("--oldest", action="store_true",
                    help="probe: fetch from the OLDEST end (sort=ASC), where rows without a "
                         "buyer live — the ones that are either unsold or still running")
@@ -683,6 +707,10 @@ async def cli(argv=None) -> int:
 
     await ah_db.init_db()
     try:
+        if args.mode == "schema":
+            await show_schema(all_tables=args.all_tables)
+            return 0
+
         if args.mode == "status":
             await show_status()
             return 0

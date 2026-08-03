@@ -434,6 +434,81 @@ async def count_undatable(floor: int) -> int:
     return int(await _scalar1("SELECT COUNT(*) FROM auction_wins WHERE ended_at < ?", floor) or 0)
 
 
+# The table an external consumer actually wants: Torn's data, verbatim. ah_state and ah_runs are
+# scraper bookkeeping and carry nothing Torn said.
+DATA_TABLE = "auction_wins"
+
+# Per-column meaning, for the machine-readable schema. Kept in Python rather than parsed out of
+# ah_schema.sql's comments — parsing SQL comments is fragile, and a test asserts every column has an
+# entry, so a new column cannot ship undocumented. That test is the anti-drift mechanism; without it
+# this dict would rot silently.
+#
+# These describe SEMANTICS, not types. The types are already in the schema; what an endpoint author
+# cannot see from a PRAGMA is that a NULL here is meaningful rather than missing.
+COLUMN_DOCS = {
+    "auction_id": "Torn's auction listing id (`id` in the API). Primary key; auctions are immutable "
+                  "once ended, so a row never changes after insert.",
+    "uid": "Armoury uid, as TEXT. NULL means the item has NO uid — every stackable, ~9% of rows. "
+           "That is Torn's `uid: 0`, normalised. Absence is meaningful, not missing data.",
+    "item_id": "Torn item id.",
+    "item_name": "Item name at the time of the auction.",
+    "item_type": "Torn item type: Weapon / Armor / Drug / Collectible / …",
+    "sub_type": "Weapon class (Rifle, Pistol, …). NULL for anything that is not a weapon.",
+    "damage": "Weapon damage. NULL for armour and for stackables.",
+    "accuracy": "Weapon accuracy. NULL for armour and for stackables.",
+    "armor": "Armour rating. NULL for weapons and for stackables.",
+    "quality": "Item quality. NULL for stackables.",
+    "rarity": "yellow / orange / red, or NULL for an ordinary item.",
+    "bonuses": "Raw JSON array exactly as Torn returned it — id, title, description, value per "
+               "bonus. Query with json_extract(bonuses, '$[0].title'). NULL when the item has none.",
+    "seller_id": "Player who listed the auction.",
+    "seller_name": "Their name at the time. Names change; the id is the stable key.",
+    "buyer_id": "Player who won it. NULL means the auction ENDED UNSOLD — this is the "
+                "'actually sold' filter, and ignoring it will skew any aggregate. Rare: <0.05%.",
+    "buyer_name": "Their name at the time. NULL when unsold.",
+    "price": "Winning bid. NULL when the auction drew 0 bids, i.e. nothing cleared.",
+    "bids": "Number of bids placed.",
+    "ended_at": "TORN's timestamp: unix seconds, when the auction ended. The one to filter and "
+                "sort on.",
+    "seen_at": "OUR timestamp: when the scraper recorded the row. The gap from ended_at is scrape "
+               "lag, not market behaviour. MAX(seen_at) is how fresh the whole dataset is.",
+}
+
+
+async def table_schema(table: str) -> Dict[str, Any]:
+    """Columns, indexes and (for the data table) semantics — machine-readable."""
+    cur = await _db.execute(f"PRAGMA table_info({table})")
+    columns = [{
+        "name": r[1], "type": r[2], "notnull": bool(r[3]), "default": r[4],
+        "primary_key": bool(r[5]), "description": COLUMN_DOCS.get(r[1]),
+    } for r in await cur.fetchall()]
+
+    indexes = []
+    cur = await _db.execute(f"PRAGMA index_list({table})")
+    for row in await cur.fetchall():
+        icur = await _db.execute(f"PRAGMA index_info({row[1]})")
+        indexes.append({"name": row[1], "unique": bool(row[2]),
+                        "columns": [c[2] for c in await icur.fetchall()]})
+
+    out: Dict[str, Any] = {"name": table, "columns": columns, "indexes": indexes,
+                           "row_count": int(await _scalar1(f"SELECT COUNT(*) FROM {table}") or 0)}
+    if table == DATA_TABLE:
+        cur = await _db.execute(
+            "SELECT SUM(buyer_id IS NULL) AS unsold, SUM(uid IS NULL) AS without_uid, "
+            "MIN(ended_at) AS earliest, MAX(ended_at) AS latest, MAX(seen_at) AS last_scraped "
+            "FROM auction_wins"
+        )
+        out["coverage"] = dict(await cur.fetchone())
+    return out
+
+
+async def table_names() -> List[str]:
+    cur = await _db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    )
+    return [r[0] for r in await cur.fetchall()]
+
+
 async def stats() -> Dict[str, Any]:
     """Everything needed to answer "is the scraper healthy and how much have we got" in one call."""
     cur = await _db.execute(
