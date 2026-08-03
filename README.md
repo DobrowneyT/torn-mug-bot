@@ -383,8 +383,31 @@ be judged on its own hit rate rather than by feel.
 `(buyer_id, ended_at)` and `ended_at` make per-item price history and per-player buying history both
 cheap, and WAL means a reader never blocks the scraper.
 
+```bash
+./.venv/bin/python ah_scrape.py schema              # auction_wins, machine-readable
+./.venv/bin/python ah_scrape.py schema --all-tables # + the scraper's bookkeeping tables
+```
+
+Emits columns, types, indexes, row count and coverage as JSON — plus **per-column semantics**, which
+is the part a `PRAGMA` cannot give you. `auction_wins` is the only table an external consumer wants;
+the other two are scraper bookkeeping and hold nothing Torn said. Data freshness is `MAX(seen_at)`
+on the data table itself, so nothing is lost by ignoring them.
+
 **Every field Torn returns is stored**, including all four stats and the full `bonuses` array as raw
 JSON. Only `_metadata` (pagination links) is discarded.
+
+Four NULLs mean something rather than nothing, and an endpoint built without knowing that will
+produce confidently wrong aggregates:
+
+| column | NULL means |
+|---|---|
+| `buyer_id` | the auction **ended unsold** — this is the "actually sold" filter |
+| `uid` | the item has **no** armoury uid — every stackable, ~9% of rows |
+| `price` | **0 bids**; nothing cleared |
+| `sub_type` / `damage` / `armor` | not applicable to that item class, not missing |
+
+And `ended_at` is **Torn's** timestamp (when the auction ended); `seen_at` is **ours** (when we
+recorded it). The gap is scrape lag, not market behaviour.
 
 Rows are dropped in exactly one case: no `id` or no `timestamp`, which is malformed rather than
 meaningful. Auctions that **ended unsold** are kept with `buyer_id NULL` — they transfer no
