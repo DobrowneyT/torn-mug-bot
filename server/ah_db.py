@@ -93,8 +93,41 @@ async def init_db(path: Optional[str] = None) -> aiosqlite.Connection:
     await _db.execute("PRAGMA synchronous = NORMAL")
     with open(SCHEMA_PATH) as f:
         await _db.executescript(f.read())
+    await _migrate_buyer_nullable()
     await _commit()
     return _db
+
+
+async def _migrate_buyer_nullable() -> None:
+    """Drop the NOT NULL on buyer_id so unsold auctions can be kept.
+
+    `CREATE TABLE IF NOT EXISTS` cannot relax a constraint on a table that already exists, and
+    SQLite has no ALTER for it, so an existing ledger has to be rebuilt. Done as a table copy inside
+    one transaction: on 548k rows that is seconds, and it either completes or leaves the original
+    untouched.
+
+    Idempotent — it inspects the column and does nothing if the constraint is already gone, so it
+    costs one PRAGMA on every subsequent start.
+    """
+    cur = await _db.execute("PRAGMA table_info(auction_wins)")
+    cols = {r[1]: r for r in await cur.fetchall()}
+    if "buyer_id" not in cols or not cols["buyer_id"][3]:     # r[3] == notnull
+        return
+    log.warning("migrating auction_wins: making buyer_id nullable so unsold auctions can be kept")
+    await _db.executescript("""
+        PRAGMA foreign_keys = OFF;
+        BEGIN;
+        CREATE TABLE auction_wins_new AS SELECT * FROM auction_wins WHERE 0;
+        DROP TABLE auction_wins_new;
+        ALTER TABLE auction_wins RENAME TO auction_wins_old;
+        COMMIT;
+    """)
+    with open(SCHEMA_PATH) as f:
+        await _db.executescript(f.read())                     # recreates with the current schema
+    await _db.execute("INSERT INTO auction_wins SELECT * FROM auction_wins_old")
+    await _db.execute("DROP TABLE auction_wins_old")
+    await _db.commit()
+    log.warning("migration done: %d auction(s) preserved", await count_auctions())
 
 
 async def close_db() -> None:
@@ -168,8 +201,11 @@ async def owner_of_uid(uid: Any) -> Optional[Dict]:
     """
     if uid is None:
         return None
+    # buyer_id NOT NULL: an unsold auction transferred nothing, so it is not an ownership
+    # observation. Filtering here rather than at the call sites means no caller can forget.
     cur = await _db.execute(
-        "SELECT * FROM auction_wins WHERE uid = ? ORDER BY ended_at DESC LIMIT 1", (str(uid),)
+        "SELECT * FROM auction_wins WHERE uid = ? AND buyer_id IS NOT NULL "
+        "ORDER BY ended_at DESC LIMIT 1", (str(uid),)
     )
     row = await cur.fetchone()
     return dict(row) if row else None
@@ -193,7 +229,8 @@ async def wins_for_uids(uids) -> Dict[str, Dict]:
             # Sentinel uids are filtered here rather than at the call sites, so no caller can
             # forget: a uid on tens of thousands of auctions is not an item, and returning it would
             # attribute unrelated listings to whoever last "won" it.
-            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) AND uid NOT IN "
+            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) "
+            f"AND buyer_id IS NOT NULL AND uid NOT IN "
             f"(SELECT uid FROM auction_wins WHERE uid IS NOT NULL GROUP BY uid HAVING COUNT(*) > ?) "
             f"ORDER BY ended_at DESC",
             chunk + [config.AH_MAX_UID_REUSE],
@@ -219,7 +256,8 @@ async def all_wins_for_uids(uids) -> Dict[str, List[Dict]]:
             # Sentinel uids are filtered here rather than at the call sites, so no caller can
             # forget: a uid on tens of thousands of auctions is not an item, and returning it would
             # attribute unrelated listings to whoever last "won" it.
-            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) AND uid NOT IN "
+            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) "
+            f"AND buyer_id IS NOT NULL AND uid NOT IN "
             f"(SELECT uid FROM auction_wins WHERE uid IS NOT NULL GROUP BY uid HAVING COUNT(*) > ?) "
             f"ORDER BY ended_at DESC",
             chunk + [config.AH_MAX_UID_REUSE],
@@ -378,6 +416,7 @@ async def stats() -> Dict[str, Any]:
     """Everything needed to answer "is the scraper healthy and how much have we got" in one call."""
     cur = await _db.execute(
         "SELECT COUNT(*) AS rows, COUNT(uid) AS with_uid, COUNT(DISTINCT buyer_id) AS buyers, "
+        "SUM(buyer_id IS NULL) AS unsold, "
         "MIN(ended_at) AS oldest, MAX(ended_at) AS newest FROM auction_wins"
     )
     row = dict(await cur.fetchone())
