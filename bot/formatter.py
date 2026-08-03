@@ -228,6 +228,24 @@ def build_mug_alert_embed(event: Dict) -> discord.Embed:
         active = f"{dl}s ago" if dl < 60 else _relative(int(datetime.now(timezone.utc).timestamp()) - dl)
         lines.append(f"⚠️ Likely de-list (seller active {active})")
 
+    # Seller INFERRED from an auction-house win rather than captured by the item-matcher. Stated
+    # with its evidence — age, price, and the measured probability it is right — because acting on
+    # an inference and acting on an observation are different decisions and must not look alike.
+    if event.get("attribution") == "auction":
+        m = event.get("anon_match") or {}
+        who = m.get("buyer_name") or "this player"
+        bits = []
+        if m.get("price"):
+            bits.append(f"${m['price']:,}")
+        if m.get("age_days") is not None:
+            age = m["age_days"]
+            bits.append("today" if age < 1 else f"{age}d ago" if age < 60 else f"{age // 30}mo ago")
+        detail = f" for {' '.join(bits)}" if bits else ""
+        conf = m.get("confidence")
+        conf_txt = f" · ~{conf * 100:.0f}% likely correct" if conf else ""
+        lines.append(f"🕵️ **Anon match** — seller inferred from the auction house: "
+                     f"{who} won this item{detail}{conf_txt}")
+
     if event.get("faction"):
         lines.append(f"Faction: {event['faction']}")
 

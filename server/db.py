@@ -601,7 +601,11 @@ _FORWARD_COLS = {
     "sellers": _SELLER_FORWARD_COLS,
     "watchlist": {"category": "TEXT"},
     "item_values": {"type": "TEXT"},   # Torn item `type` (Primary/Secondary/Melee/Defensive/Drug/…)
-    "tracked_gear": {"seen": "INTEGER"},   # polls present since attribution (stale-match guard)
+    "tracked_gear": {"seen": "INTEGER",    # polls present since attribution (stale-match guard)
+                     # How we know who the seller is: NULL/'matcher' = the item-matcher captured
+                     # them; 'auction' = INFERRED from an AH win. The alert has to be able to tell
+                     # them apart, because the confidence is materially different.
+                     "attribution": "TEXT"},
 }
 
 
@@ -924,15 +928,19 @@ async def get_tracked_uids_for_item(item_id) -> Dict[str, Dict]:
     return {r["uid"]: dict(r) for r in await cur.fetchall()}
 
 
-async def upsert_tracked_gear(*, uid, item_id, item_name, price, seller_id, stats_json=None) -> None:
+async def upsert_tracked_gear(*, uid, item_id, item_name, price, seller_id, stats_json=None,
+                              attribution=None) -> None:
     now = _now()
     await _db.execute(
         """INSERT INTO tracked_gear(uid, item_id, item_name, price, seller_id, stats_json,
-                                    misses, seen, first_seen, last_seen)
-           VALUES (?,?,?,?,?,?,0,1,?,?)
+                                    attribution, misses, seen, first_seen, last_seen)
+           VALUES (?,?,?,?,?,?,?,0,1,?,?)
            ON CONFLICT(uid) DO UPDATE SET misses=0, last_seen=excluded.last_seen,
-               price=excluded.price, seen=COALESCE(tracked_gear.seen, 1) + 1""",
-        (str(uid), item_id, item_name, price, seller_id, stats_json, now, now),
+               price=excluded.price, seen=COALESCE(tracked_gear.seen, 1) + 1,
+               -- A later DIRECT capture must overwrite an earlier inference, never the reverse:
+               -- COALESCE would pin the first answer, and the first answer is the weaker one.
+               seller_id=excluded.seller_id, attribution=excluded.attribution""",
+        (str(uid), item_id, item_name, price, seller_id, stats_json, attribution, now, now),
     )
     await _commit()
 

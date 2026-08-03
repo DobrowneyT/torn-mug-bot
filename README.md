@@ -356,6 +356,26 @@ which is a no-op insert.
 Unlike `forward`, it is bounded by wall clock rather than page count — the length of a history
 download is precisely the number we are trying to measure, so capping pages would mean guessing it.
 
+### The anon-match alert
+
+With `/anonmatch` on (silent by default), a gear sale whose seller was inferred rather than captured
+posts with its provenance stated:
+
+> 🕵️ **Anon match** — seller inferred from the auction house: Buyer4242 won this item for
+> $9,000,000 3d ago · ~88% likely correct
+
+Three precedence rules govern it, and each one is a way to blame the wrong player:
+
+- **direct beats inferred.** A captured seller overrides an AH inference — *including* when the
+  inference got there first. That case is easy to miss: once a uid is tracked, the poller
+  short-circuits the whole resolution chain, so the upgrade has to be explicit. Without it the
+  first answer wins for the life of the listing, and the first answer is the weaker one.
+- **later beats earlier.** Ownership is the most recent observation from any source.
+- **`off` means off.** It reproduces today's behaviour exactly — an anonymous uid stays a dead end.
+
+The reconcile tally gains an `auction` bucket alongside `uid` and `anon`, so the inferred path can
+be judged on its own hit rate rather than by feel.
+
 ### Using the ledger for other things
 
 `mug_ah.db` is standalone — no foreign keys into `mug_bot.db`, no application state beyond
