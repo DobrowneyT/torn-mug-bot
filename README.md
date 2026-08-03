@@ -376,6 +376,31 @@ Three precedence rules govern it, and each one is a way to blame the wrong playe
 The reconcile tally gains an `auction` bucket alongside `uid` and `anon`, so the inferred path can
 be judged on its own hit rate rather than by feel.
 
+### Searching by bonus (`reindex`)
+
+`bonuses` is stored as the raw JSON Torn returns, which is right for fidelity and useless for
+searching. `auction_bonuses` normalises it so a query can filter on **bonus id and a value range**
+without scanning half a million JSON blobs:
+
+```sql
+SELECT auction_id FROM auction_bonuses WHERE bonus_id = 86 AND value BETWEEN 5 AND 9;
+```
+
+It is populated as auctions arrive, so a live scrape never leaves it behind. It is **derived** —
+`auction_wins.bonuses` stays the source of truth — which means anything wrong with it is fixed by
+regenerating, never by migrating:
+
+```bash
+./.venv/bin/python ah_scrape.py reindex     # ~6s for 548k auctions
+```
+
+`status` reports whether it is in step, because nobody watches a derived table and the alternative
+is discovering the drift by running a search and not noticing the answers are wrong.
+
+Two things it is careful about: a bonus with **no value** is stored NULL rather than 0, so it cannot
+satisfy a range filter and quietly widen a search; and the same bonus appearing twice on one item is
+kept as two rows (the primary key includes an ordinal) rather than collapsing.
+
 ### Using the ledger for other things
 
 `mug_ah.db` is standalone — no foreign keys into `mug_bot.db`, no application state beyond

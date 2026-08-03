@@ -15,6 +15,8 @@ Runs as a cron process, not inside the bot. Two modes:
             database, with a measured confidence. Runs automatically after `forward`.
   schema    machine-readable JSON schema of the ledger, with per-column semantics. For building
             things that read this database from outside.
+  reindex   rebuild auction_bonuses from auction_wins.bonuses. Derived data, so a rebuild is the
+            fix for anything wrong with it — never a migration.
 
 Both are resumable: forward is capped by page count (catching up should never be large), backfill
 by wall clock (its length is exactly what we are trying to measure). An interrupted run loses
@@ -404,6 +406,15 @@ async def show_status() -> None:
         print(f"  {_fmt_ts(r['started_at'])}  {r['mode']:<8} pages={r['pages']:<3} "
               f"new={r['rows_new']:<5} {state}")
 
+    health = await ah_db.bonus_index_health()
+    if health["auctions_with_bonuses"]:
+        state = "in step" if health["in_step"] else "STALE — run `ah_scrape.py reindex`"
+        print(f"bonus index: {health['rows']:,} row(s) over "
+              f"{health['auctions_indexed']:,}/{health['auctions_with_bonuses']:,} auctions ({state})")
+        if health["same_bonus_twice"]:
+            print(f"             {health['same_bonus_twice']:,} auction(s) carry the same bonus "
+                  f"more than once — kept, distinguished by ordinal")
+
     bad = await ah_db.count_undatable(config.AH_MIN_TIMESTAMP)
     if bad:
         print()
@@ -686,7 +697,7 @@ async def cli(argv=None) -> int:
     p = argparse.ArgumentParser(prog="ah_scrape", description="Torn auction house scraper")
     p.add_argument("mode",
                    choices=["forward", "backfill", "probe", "status", "coverage", "calibrate",
-                            "match", "schema"],
+                            "match", "schema", "reindex"],
                    nargs="?", default="forward")
     p.add_argument("--no-match", action="store_true",
                    help="forward: skip the match step that normally follows the scrape")
@@ -707,6 +718,11 @@ async def cli(argv=None) -> int:
 
     await ah_db.init_db()
     try:
+        if args.mode == "reindex":
+            print(json.dumps(await ah_db.rebuild_bonus_index()))
+            print(json.dumps(await ah_db.bonus_index_health()))
+            return 0
+
         if args.mode == "schema":
             await show_schema(all_tables=args.all_tables)
             return 0

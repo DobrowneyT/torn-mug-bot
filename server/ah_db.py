@@ -175,7 +175,102 @@ async def record_auctions(rows: List[Dict[str, Any]]) -> int:
         await _db.executemany(
             _INSERT, [tuple(r.get(c) for c in _COLUMNS) + (seen,) for r in rows]
         )
-    return _db.total_changes - before
+        # Read the delta BEFORE indexing bonuses. total_changes is cumulative for the whole
+        # connection, so counting after would fold bonus rows into "new auctions" — a number the
+        # scrape logs, the run log and the "did anything change" checks all rely on.
+        inserted = _db.total_changes - before
+        await _index_bonuses(rows)
+    return inserted
+
+
+def _bonus_rows(auction_id, bonuses_json) -> List[tuple]:
+    """(auction_id, bonus_id, value, ordinal) for one auction's bonuses JSON.
+
+    `ordinal` is the position in the array, and it is in the primary key so an item carrying the
+    same bonus twice cannot silently collapse to one row. Whether Torn ever does that is unverified;
+    the key is cheap insurance either way.
+    """
+    if not bonuses_json:
+        return []
+    try:
+        bonuses = json.loads(bonuses_json)
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(bonuses, list):
+        return []
+    out = []
+    for i, b in enumerate(bonuses):
+        if not isinstance(b, dict) or b.get("id") is None:
+            continue
+        value = b.get("value")
+        out.append((auction_id, int(b["id"]),
+                    int(value) if isinstance(value, (int, float)) else None, i))
+    return out
+
+
+async def _index_bonuses(rows: List[Dict[str, Any]]) -> None:
+    """Populate auction_bonuses for freshly-inserted auctions. Caller supplies the batch()."""
+    payload = []
+    for r in rows:
+        payload.extend(_bonus_rows(r.get("auction_id"), r.get("bonuses")))
+    if payload:
+        await _db.executemany(
+            "INSERT INTO auction_bonuses(auction_id, bonus_id, value, ordinal) VALUES (?,?,?,?) "
+            "ON CONFLICT(auction_id, bonus_id, ordinal) DO NOTHING",
+            payload,
+        )
+
+
+async def rebuild_bonus_index(*, chunk: int = 20_000) -> Dict[str, int]:
+    """Drop and repopulate auction_bonuses from auction_wins.bonuses.
+
+    A full rebuild rather than an incremental fix-up, because the table is derived: if the shape is
+    ever wrong the answer is to regenerate it, not to migrate it. Chunked so a 548k-row pass does
+    not build one enormous transaction on a database the scraper is also writing to.
+    """
+    await _db.execute("DELETE FROM auction_bonuses")
+    await _db.commit()
+    scanned = indexed = 0
+    last = 0
+    while True:
+        cur = await _db.execute(
+            "SELECT auction_id, bonuses FROM auction_wins "
+            "WHERE bonuses IS NOT NULL AND auction_id > ? ORDER BY auction_id LIMIT ?",
+            (last, chunk),
+        )
+        batch_rows = await cur.fetchall()
+        if not batch_rows:
+            break
+        payload = []
+        for auction_id, bonuses in batch_rows:
+            payload.extend(_bonus_rows(auction_id, bonuses))
+            last = auction_id
+        scanned += len(batch_rows)
+        if payload:
+            await _db.executemany(
+                "INSERT INTO auction_bonuses(auction_id, bonus_id, value, ordinal) "
+                "VALUES (?,?,?,?) ON CONFLICT(auction_id, bonus_id, ordinal) DO NOTHING",
+                payload,
+            )
+            indexed += len(payload)
+        await _db.commit()
+    log.info("bonus index rebuilt: %d auction(s) scanned, %d bonus row(s)", scanned, indexed)
+    return {"scanned": scanned, "indexed": indexed}
+
+
+async def bonus_index_health() -> Dict[str, Any]:
+    """Is the derived table in step with its source? Cheap enough to run from `status`."""
+    with_bonuses = int(await _scalar1(
+        "SELECT COUNT(*) FROM auction_wins WHERE bonuses IS NOT NULL") or 0)
+    indexed = int(await _scalar1(
+        "SELECT COUNT(DISTINCT auction_id) FROM auction_bonuses") or 0)
+    dupes = int(await _scalar1(
+        "SELECT COUNT(*) FROM (SELECT auction_id, bonus_id FROM auction_bonuses "
+        "GROUP BY auction_id, bonus_id HAVING COUNT(*) > 1)") or 0)
+    return {"auctions_with_bonuses": with_bonuses, "auctions_indexed": indexed,
+            "rows": int(await _scalar1("SELECT COUNT(*) FROM auction_bonuses") or 0),
+            "same_bonus_twice": dupes,
+            "in_step": with_bonuses == indexed}
 
 
 async def newest_ended_at() -> Optional[int]:

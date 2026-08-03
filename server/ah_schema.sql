@@ -83,3 +83,23 @@ CREATE TABLE IF NOT EXISTS ah_runs (
     error      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_ah_runs_started ON ah_runs(started_at);
+
+-- Bonuses, normalised for searching. DERIVED — auction_wins.bonuses stays the source of truth and
+-- this is a rebuildable index over it, so if the shape turns out wrong it can be dropped and
+-- regenerated rather than migrated.
+--
+-- Why it exists: the price-checker's central query is "items like this one", which means bonus id
+-- AND a value range. Answering that from the JSON needs json_each() over half a million rows per
+-- request, with no index available, and twice over for the two-bonus case.
+CREATE TABLE IF NOT EXISTS auction_bonuses (
+    auction_id INTEGER NOT NULL,
+    bonus_id   INTEGER NOT NULL,
+    -- NULL for bonuses that are flags with no magnitude. A range filter must not match those:
+    -- "unknown" is not "zero", and treating it as zero would quietly widen every search.
+    value      INTEGER,
+    ordinal    INTEGER NOT NULL DEFAULT 0,   -- position within the item's bonus array
+    PRIMARY KEY (auction_id, bonus_id, ordinal)
+);
+-- The lookup the search endpoint makes: given a bonus and a value window, which auctions qualify.
+CREATE INDEX IF NOT EXISTS idx_auction_bonuses_lookup ON auction_bonuses(bonus_id, value);
+CREATE INDEX IF NOT EXISTS idx_auction_bonuses_auction ON auction_bonuses(auction_id);
