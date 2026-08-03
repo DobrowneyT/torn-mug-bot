@@ -373,6 +373,19 @@ Each row carries a `confidence` — the **measured** probability that the AH buy
 seller, given how old the evidence is, taken from `calibrate` rather than chosen. It also carries
 the evidence age and the auction price, so an alert can show its own provenance.
 
+Posting is controlled by `/anonmatch mode:silent|ping|off`, **silent by default**:
+
+| mode | behaviour |
+|---|---|
+| `off` | don't infer at all — an anonymous uid stays the dead end it is today |
+| `silent` | post the alert, never ping the role *(default)* |
+| `ping` | ping, but only above `min_confidence`; weaker inferences still post, silently |
+
+`ping` is gated on **confidence rather than age**, because the measured curve has no cliff to cut
+at — old evidence is weaker, not worthless, so an age cutoff would discard thousands of usable
+matches to avoid a minority of wrong ones. The default bar (0.88) is the measured accuracy of
+week-old evidence, so out of the box a ping means "won at auction within the last week".
+
 Two rules the match step enforces, both of which are correctness rather than polish:
 
 - **direct evidence beats inferred.** A uid the item-matcher has since captured a real seller for

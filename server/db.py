@@ -38,6 +38,8 @@ _CONFIG_DEFAULTS = {
     "delist_mode": config.DELIST_MODE,                          # /delist mode: ping|silent|off (live)
     "hosp_mode": config.HOSP_MODE,                              # /hosplock mode: live|remind|hold (live)
     "hosp_lead_seconds": config.HOSPITAL_RELEASE_LEAD_SECONDS,   # /hosplock lead_minutes (live)
+    "anonmatch_mode": config.ANONMATCH_MODE,                     # /anonmatch mode (live)
+    "anonmatch_min_confidence": config.ANONMATCH_MIN_CONFIDENCE,  # /anonmatch min_confidence (live)
 }
 
 # Columns added after the initial schema; ALTER-ed onto existing DBs on startup so upgrades
