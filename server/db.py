@@ -669,6 +669,20 @@ async def record_sale(*, listing_id, item_id, item_name, seller_id, qty_sold,
     return cur.lastrowid
 
 
+async def recent_sales_for(seller_id, item_id, since) -> List[Dict]:
+    """This seller's sales of one item since `since` — the candidate set for cross-path dedup.
+
+    Narrow on purpose: indexed by seller and filtered to a single item and a window of a few
+    minutes, so it runs on the alert path without competing with it.
+    """
+    cur = await _db.execute(
+        """SELECT id, listing_id, qty_sold, unit_price, total_value, sold_at
+           FROM sales WHERE seller_id=? AND item_id=? AND sold_at>=? ORDER BY sold_at DESC""",
+        (seller_id, item_id, int(since)),
+    )
+    return [dict(r) for r in await cur.fetchall()]
+
+
 async def delete_sale(sale_id) -> None:
     """Remove a recorded sale (used when a gear vanish turns out to be a delist, not a buy)."""
     await _db.execute("DELETE FROM sales WHERE id=?", (sale_id,))
