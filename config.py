@@ -134,6 +134,17 @@ AH_CONFIDENCE_BANDS = (
 # matching and from the turnover statistics, which it otherwise dominates.
 AH_MAX_UID_REUSE = int(os.environ.get("MUG_AH_MAX_UID_REUSE", "50"))
 
+# Seller-side inference: an auction that ended UNSOLD says the SELLER kept the item. Same shape as
+# AH_CONFIDENCE_BANDS, but a DIFFERENT population — someone whose auction failed is far more likely
+# than a random owner to relist, including anonymously, which is exactly what we are resolving. That
+# could make it a better signal than the buyer side, or a worse one; sharing the buyer's bands would
+# hide whichever it is.
+#
+# None means UNMEASURED, and unmeasured means UNUSED — seller-side rows are excluded from matching
+# entirely until this is filled in from `ah_scrape.py calibrate`. That is deliberate: mixing an
+# uncalibrated source into a calibrated model is how a confidence number stops meaning anything.
+AH_SELLER_CONFIDENCE_BANDS = None
+
 # ---- Anon-match alerts (seller INFERRED from an AH win, not captured) ----
 #   off    - do not infer at all; an anonymous uid stays the dead end it is today
 #   silent - post the alert, never ping the role                                   (DEFAULT)

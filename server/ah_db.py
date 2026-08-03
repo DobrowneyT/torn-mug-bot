@@ -213,58 +213,80 @@ async def owner_of_uid(uid: Any) -> Optional[Dict]:
 
 # --------------------------------- scraper bookkeeping --------------------------------
 
-async def wins_for_uids(uids) -> Dict[str, Dict]:
-    """Most recent win per uid, for a set of uids. The bulk form of owner_of_uid.
+async def _rows_for_uids(uids, *, include_unsold: bool) -> List[Dict]:
+    """Ledger rows for a set of uids, newest first. The shared query behind both lookups.
 
     Chunked because SQLite caps host parameters (999 by default) and the caller's set is the whole
-    anon backlog — thousands of uids. Newest-first with a dict that keeps the first hit per uid, so
-    the "latest observation wins" rule holds without a per-uid query.
+    anon backlog — thousands of uids.
+
+    `include_unsold` is the important switch. An auction that ended unsold transferred nothing, so
+    for an OWNERSHIP lookup it must be excluded — otherwise the newest row for a uid could name a
+    buyer that does not exist. For CALIBRATION it must be included, because "the seller kept it" is
+    exactly the hypothesis being measured.
+
+    Sentinel uids are filtered here rather than at the call sites, so no caller can forget: a uid on
+    tens of thousands of auctions is not an item, and returning it would attribute unrelated
+    listings to whoever last touched it.
     """
-    out: Dict[str, Dict] = {}
+    out: List[Dict] = []
     keys = [str(u) for u in uids]
+    sold_only = "" if include_unsold else "AND buyer_id IS NOT NULL "
     for i in range(0, len(keys), 500):
         chunk = keys[i:i + 500]
         placeholders = ",".join("?" * len(chunk))
         cur = await _db.execute(
-            # Sentinel uids are filtered here rather than at the call sites, so no caller can
-            # forget: a uid on tens of thousands of auctions is not an item, and returning it would
-            # attribute unrelated listings to whoever last "won" it.
-            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) "
-            f"AND buyer_id IS NOT NULL AND uid NOT IN "
+            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) {sold_only}"
+            f"AND uid NOT IN "
             f"(SELECT uid FROM auction_wins WHERE uid IS NOT NULL GROUP BY uid HAVING COUNT(*) > ?) "
             f"ORDER BY ended_at DESC",
             chunk + [config.AH_MAX_UID_REUSE],
         )
-        for row in await cur.fetchall():
-            out.setdefault(row["uid"], dict(row))
+        out.extend(dict(r) for r in await cur.fetchall())
+    return out
+
+
+async def wins_for_uids(uids, *, include_unsold: bool = False) -> Dict[str, Dict]:
+    """Most recent OWNERSHIP observation per uid. The bulk form of owner_of_uid.
+
+    Sold-only by default: an unsold auction transfers nothing. Pass include_unsold once seller-side
+    inference has been calibrated (see AH_SELLER_CONFIDENCE_BANDS) — the caller is then responsible
+    for reading the owner off the right column.
+    """
+    out: Dict[str, Dict] = {}
+    for row in await _rows_for_uids(uids, include_unsold=include_unsold):
+        out.setdefault(row["uid"], row)      # newest-first, so the first hit per uid is the latest
     return out
 
 
 async def all_wins_for_uids(uids) -> Dict[str, List[Dict]]:
-    """EVERY win per uid, newest first — not just the latest.
+    """EVERY row per uid, newest first — including auctions that ended unsold.
 
     Calibration needs "who did the AH say owned this uid at time T", which is a different question
     from "who owns it now". A uid can be auctioned repeatedly, so answering it requires the whole
-    history per uid and a pick in the caller, not a single row.
+    history per uid and a pick in the caller, not a single row — and it needs the unsold rows,
+    since seller-side inference is precisely what is being measured.
     """
     out: Dict[str, List[Dict]] = {}
-    keys = [str(u) for u in uids]
-    for i in range(0, len(keys), 500):
-        chunk = keys[i:i + 500]
-        placeholders = ",".join("?" * len(chunk))
-        cur = await _db.execute(
-            # Sentinel uids are filtered here rather than at the call sites, so no caller can
-            # forget: a uid on tens of thousands of auctions is not an item, and returning it would
-            # attribute unrelated listings to whoever last "won" it.
-            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) "
-            f"AND buyer_id IS NOT NULL AND uid NOT IN "
-            f"(SELECT uid FROM auction_wins WHERE uid IS NOT NULL GROUP BY uid HAVING COUNT(*) > ?) "
-            f"ORDER BY ended_at DESC",
-            chunk + [config.AH_MAX_UID_REUSE],
-        )
-        for row in await cur.fetchall():
-            out.setdefault(row["uid"], []).append(dict(row))
+    for row in await _rows_for_uids(uids, include_unsold=True):
+        out.setdefault(row["uid"], []).append(row)
     return out
+
+
+def inferred_owner(win: Optional[Dict]):
+    """(player_id, source) a ledger row implies, or None.
+
+    A completed sale says the BUYER holds it. An auction that ended unsold says the SELLER kept it.
+    Both are point-in-time ownership observations of equal strength at the moment they happen — but
+    they are differently selected populations afterwards, so they carry their own confidence curves
+    and must never share one.
+    """
+    if not win:
+        return None
+    if win.get("buyer_id"):
+        return win["buyer_id"], "buyer"
+    if win.get("seller_id"):
+        return win["seller_id"], "seller"
+    return None
 
 
 def win_as_of(wins: List[Dict], ts: int) -> Optional[Dict]:
