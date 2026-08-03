@@ -198,6 +198,38 @@ async def wins_for_uids(uids) -> Dict[str, Dict]:
     return out
 
 
+async def all_wins_for_uids(uids) -> Dict[str, List[Dict]]:
+    """EVERY win per uid, newest first — not just the latest.
+
+    Calibration needs "who did the AH say owned this uid at time T", which is a different question
+    from "who owns it now". A uid can be auctioned repeatedly, so answering it requires the whole
+    history per uid and a pick in the caller, not a single row.
+    """
+    out: Dict[str, List[Dict]] = {}
+    keys = [str(u) for u in uids]
+    for i in range(0, len(keys), 500):
+        chunk = keys[i:i + 500]
+        placeholders = ",".join("?" * len(chunk))
+        cur = await _db.execute(
+            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) ORDER BY ended_at DESC",
+            chunk,
+        )
+        for row in await cur.fetchall():
+            out.setdefault(row["uid"], []).append(dict(row))
+    return out
+
+
+def win_as_of(wins: List[Dict], ts: int) -> Optional[Dict]:
+    """The most recent win strictly BEFORE ts — what the AH would have inferred at that moment.
+
+    `wins` must be newest-first (as all_wins_for_uids returns it), so the first match is the answer.
+    """
+    for win in wins:
+        if win["ended_at"] < ts:
+            return win
+    return None
+
+
 async def uid_turnover() -> Dict[str, int]:
     """How often a uid is auctioned more than once — the evidence-staleness question.
 

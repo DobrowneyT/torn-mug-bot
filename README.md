@@ -263,6 +263,7 @@ with alerts.
 ./.venv/bin/python ah_scrape.py forward     # pull newly-completed auctions (this is the cron job)
 ./.venv/bin/python ah_scrape.py backfill    # walk history backwards; resumable, run until complete
 ./.venv/bin/python ah_scrape.py coverage    # how much of the anon backlog the ledger can resolve
+./.venv/bin/python ah_scrape.py calibrate   # how ACCURATE that resolution would have been
 ./.venv/bin/python ah_scrape.py probe       # print raw API rows, store nothing
 ```
 
@@ -336,6 +337,41 @@ which is a no-op insert.
 
 Unlike `forward`, it is bounded by wall clock rather than page count — the length of a history
 download is precisely the number we are trying to measure, so capping pages would mean guessing it.
+
+### How far can an AH win be trusted? (`calibrate`)
+
+The auction house is a **lossy observer of ownership**. A uid also changes hands by trade, by
+bazaar, and by item-market sale, and it sees none of those. So "most recent AH win" is not "current
+owner" — it is an estimate that decays, and the decay is what any confidence model has to be built
+on.
+
+That decay is measurable retroactively, with no feedback loop and no waiting. For every uid we have
+*directly* observed a seller for, ask what the auction house would have claimed at that moment and
+whether it matched:
+
+```
+  evidence age    checked   agreed   accuracy
+  0-1d                 99       91      91.9%
+  1-7d                113      107      94.7%
+  7-30d                92       83      90.2%
+  30-90d              114       86      75.4%
+  90-365d              85       33      38.8%
+  365d+                97        4       4.1%
+  overall             600      404      67.3%
+```
+
+(Illustrative shape only — run it for your real numbers.) Read a row as: *if an anon-match alert had
+fired on evidence this old, this is how often it would have named the right player.*
+
+The ground truth comes from three places, and the important one is `sales`: gear sales are recorded
+with `listing_id = "uid:<uid>"`, which makes that table an accidental but complete historical
+uid→seller log. Unlike `listings` and `tracked_gear` it survives the listing vanishing — which is
+precisely when a sale happens.
+
+One honest caveat the report prints itself: the sample only covers uids that reached the **item
+market**, because that is the only place a seller is observable. A uid won at auction and kept
+forever never appears. That is the right bias — we only ever infer for uids we can see listed — but
+the numbers describe items that move.
 
 ### Is the ledger worth anything? (`coverage`)
 
