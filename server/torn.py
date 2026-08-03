@@ -14,7 +14,7 @@ per-key budget, mirroring the war-room rotation.
 
 import logging
 import time
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import httpx
 
@@ -158,6 +158,37 @@ async def get_all_item_values(client: httpx.AsyncClient) -> Optional[Dict]:
         if mv:   # skip items with no/0 market value
             out[iid] = {"name": v.get("name"), "market_value": int(mv), "type": v.get("type")}
     return out
+
+
+async def get_auctionhouse(
+    client: httpx.AsyncClient,
+    *,
+    item_id: Optional[int] = None,
+    limit: int = 100,
+    sort: str = "DESC",
+    from_ts: Optional[int] = None,
+    to_ts: Optional[int] = None,
+) -> Optional[List[Dict]]:
+    """One page of COMPLETED auctions, newest-first by default.
+
+    Torn's `timestamp` on an auction is when it ENDED, and every row carries a buyer — this is a
+    settled-sales feed, not live listings. `from`/`to` bound that timestamp, `limit` caps at 100.
+
+    Returns the raw list, or None on error. Empty list and None are NOT the same thing: the scraper
+    treats an empty page as "we have reached the end of what Torn will serve" and stops walking, so
+    conflating it with a transient API failure would permanently truncate the backfill.
+    """
+    params: Dict = {"limit": max(1, min(100, limit)), "sort": sort}
+    if from_ts is not None:
+        params["from"] = int(from_ts)
+    if to_ts is not None:
+        params["to"] = int(to_ts)
+    path = f"market/{item_id}/auctionhouse" if item_id else "market/auctionhouse"
+    data = await _get(client, path, params)
+    if data is None:
+        return None
+    rows = data.get("auctionhouse")
+    return rows if isinstance(rows, list) else []
 
 
 async def get_job(client: httpx.AsyncClient, user_id: int) -> Optional[Dict]:

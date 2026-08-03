@@ -246,6 +246,62 @@ backup over `$MUG_DB_PATH` only if a schema change actually requires it.
 column, reshaped data — needs a one-off migration step added to `db.init_db` before it is merged,
 since the database persists across deploys.
 
+## Auction house scraper
+
+Completed Torn auctions, pulled into an **ownership ledger**: which uid was won, by whom, when, for
+how much. On its own it widens uid coverage; the point of it is #12, where an anonymous item-market
+listing whose uid was won at auction can be attributed to the winner.
+
+It runs from cron, not inside the bot, and writes to **its own database file**
+(`MUG_AH_DB_PATH`, default `/var/lib/mug-bot/mug_ah.db`). That separation is deliberate: every
+statement in the bot process serialises through one SQLite connection that the alert path also
+queues on, so a backfill writing tens of thousands of rows into `mug_bot.db` would contend directly
+with alerts.
+
+```bash
+./.venv/bin/python ah_scrape.py status      # how much have we got, and did the last run work
+./.venv/bin/python ah_scrape.py forward     # pull newly-completed auctions (this is the cron job)
+./.venv/bin/python ah_scrape.py backfill    # walk history backwards; resumable, run until complete
+./.venv/bin/python ah_scrape.py probe       # print raw API rows, store nothing
+```
+
+API keys come from the same pool the bot uses (the `api_keys` table, managed with `/keys`), so
+there is nothing extra to configure. Each run is capped at `MUG_AH_MAX_PAGES` requests and paces
+itself between pages, so it cannot empty the key budget the poller depends on.
+
+Install the cron line alongside the deploy one:
+
+```bash
+( crontab -l 2>/dev/null; \
+  echo '*/10 * * * * cd /home/ubuntu/torn/torn-mug-bot && ./.venv/bin/python ah_scrape.py forward >> /var/log/mug-bot-ah.log 2>&1' \
+) | crontab -
+sudo touch /var/log/mug-bot-ah.log && sudo chown "$USER":"$USER" /var/log/mug-bot-ah.log
+```
+
+Then fill in history, which is safe to leave on a slow cron until it reports complete:
+
+```bash
+./.venv/bin/python ah_scrape.py backfill      # repeat, or */30 in cron; it no-ops once done
+```
+
+**How far back Torn will serve is not documented**, and the scraper discovers it rather than
+assuming: `backfill` walks backwards until a page comes back empty, records that history is
+complete, and `status` prints the span it reached. This also means the ledger may not be
+re-derivable later — if Torn's window is narrower than what you backfilled, re-running it will not
+get that data back. Deploys snapshot `mug_ah.db` alongside the main database for that reason.
+
+### Modes
+
+`forward` is the routine job. It requests oldest-first from just below the newest auction it holds,
+so each committed page permanently advances the watermark and an interrupted run loses nothing. It
+deliberately re-requests a few seconds either side of that watermark — Torn documents `from` as
+"after this time" without saying whether that is inclusive, and several auctions can share one end
+timestamp. Re-fetching is free because a completed auction is immutable, so a re-delivered row is a
+no-op insert.
+
+On an empty ledger `forward` takes only the newest page and stops, rather than silently walking all
+of history on a routine cron tick. Filling history is `backfill`'s job and is opt-in.
+
 ## Moving to a new server
 
 Everything that matters is two files, so a move is "copy two things":

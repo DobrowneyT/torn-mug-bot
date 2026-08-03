@@ -137,6 +137,12 @@ print_cron() {
   echo "  */5 * * * * $repo_dir/deploy/update.sh --if-changed >> /var/log/mug-bot-deploy.log 2>&1"
   echo
   echo "  (run ./deploy/update.sh by hand a few times first and watch it before automating)"
+  echo
+  echo "==> the auction house scraper is a SEPARATE cron job (optional — see README):"
+  echo
+  echo "  */10 * * * * cd $repo_dir && ./.venv/bin/python ah_scrape.py forward >> /var/log/mug-bot-ah.log 2>&1"
+  echo
+  echo "  (check it first:  cd $repo_dir && ./.venv/bin/python ah_scrape.py probe)"
 }
 
 main "$@"

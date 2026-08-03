@@ -22,5 +22,7 @@ select = ["E", "F", "I"]
 # reads the environment at import time, so the order is load-bearing, not an oversight. The existing
 # `# noqa: E402` comments document it inline.
 "main.py" = ["E402"]
+# ah_scrape.py is the same pattern for the same reason: load .env, then import config.
+"ah_scrape.py" = ["E402"]
 # Mock fixtures are tabular: one record per line reads far better than wrapped, even at 160 columns.
 "bot/mock_data.py" = ["E501"]

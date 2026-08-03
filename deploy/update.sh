@@ -28,10 +28,11 @@ main() {
   exec 9>"/tmp/mug-bot-update.lock"
   flock -n 9 || { echo "another update is already running — skipping"; exit 0; }
 
-  local service port db_path
+  local service port db_path ah_db_path
   service="${MUG_SERVICE:-mug-bot}"
   port="$(env_get "$env_file" MUG_SERVER_PORT)"; port="${port:-3001}"
   db_path="$(env_get "$env_file" MUG_DB_PATH)"; db_path="${db_path:-/var/lib/mug-bot/mug_bot.db}"
+  ah_db_path="$(env_get "$env_file" MUG_AH_DB_PATH)"; ah_db_path="${ah_db_path:-/var/lib/mug-bot/mug_ah.db}"
 
   branch="$(git rev-parse --abbrev-ref HEAD)"
   git fetch --quiet origin "$branch"
@@ -83,7 +84,14 @@ main() {
     "$repo_dir/.venv/bin/python" -m pip install --quiet -r "$repo_dir/requirements.txt"
   fi
 
-  [ "${SKIP_BACKUP:-0}" = "1" ] || backup_db "$db_path"
+  if [ "${SKIP_BACKUP:-0}" != "1" ]; then
+    backup_db "$db_path" mug_bot
+    # The AH ledger only exists once the scraper has run, and backup_db skips a missing file
+    # quietly-ish. It is worth snapshotting because it may NOT be re-derivable: how far back Torn
+    # serves auction history is capped by an amount we do not yet know, so a backfill that reached
+    # further than the current window can't simply be run again.
+    backup_db "$ah_db_path" mug_ah
+  fi
 
   echo "==> restarting $service"
   sudo systemctl restart "$service"
@@ -110,9 +118,15 @@ env_get() {
 # but does not block the deploy — a missing sqlite3 does too, but loudly, because that silently
 # disables the safety net entirely.
 backup_db() {
-  local db="$1" dir stamp name
+  local db="$1" prefix="${2:-mug_bot}" dir stamp name
   if [ ! -f "$db" ]; then
-    echo "[warn] no database at $db — skipping backup (is MUG_DB_PATH set? see deploy/provision.sh)"
+    # The AH ledger legitimately does not exist until the scraper has run for the first time, so
+    # only the main database being absent is worth alarming about.
+    if [ "$prefix" = "mug_bot" ]; then
+      echo "[warn] no database at $db — skipping backup (is MUG_DB_PATH set? see deploy/provision.sh)"
+    else
+      echo "[note] no database at $db yet — nothing to back up"
+    fi
     return 0
   fi
   if ! command -v sqlite3 >/dev/null 2>&1; then
@@ -124,7 +138,7 @@ backup_db() {
   # Timestamp + the SHA being replaced: two deploys in the same second would otherwise write the
   # same filename, and the SHA tells you at a glance which version a backup belongs to.
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-  name="mug_bot-${stamp}-$(git rev-parse --short HEAD).db"
+  name="${prefix}-${stamp}-$(git rev-parse --short HEAD).db"
   echo "==> backing up $db"
   # .backup (not cp) so the WAL is folded in and the copy is never torn.
   if ! sqlite3 "$db" ".backup '$dir/$name'"; then
@@ -132,7 +146,7 @@ backup_db() {
     return 0
   fi
   # Keep the newest 10, by mtime. find+sort rather than parsing `ls` output (shellcheck SC2012).
-  find "$dir" -maxdepth 1 -name 'mug_bot-*.db' -printf '%T@ %p\n' 2>/dev/null \
+  find "$dir" -maxdepth 1 -name "${prefix}-*.db" -printf '%T@ %p\n' 2>/dev/null \
     | sort -rn | tail -n +11 | cut -d' ' -f2- \
     | while read -r old; do rm -f "$old"; done
 }
