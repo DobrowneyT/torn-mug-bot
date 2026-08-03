@@ -197,7 +197,8 @@ async def _duplicate_from_other_path(seller_id, item_id, unit_price, qty, listin
     return None
 
 
-async def on_sale(*, seller_id, item_id, item_name, qty, unit_price, listing_id=None, bot=None, stats=None) -> None:
+async def on_sale(*, seller_id, item_id, item_name, qty, unit_price, listing_id=None, bot=None,
+                  stats=None, attribution=None, uid=None) -> None:
     """Shared sale handler used by BOTH the WS path and the API poller: record the sale,
     (re)enrich the seller, then alert if the accumulated mug clears threshold."""
     log.info("SALE detected: seller=%s item=%s(%s) qty=%s unit=%s total=%s listing=%s",
@@ -227,6 +228,7 @@ async def on_sale(*, seller_id, item_id, item_name, qty, unit_price, listing_id=
             seller_id, seller, bot,
             last_item={"item_id": item_id, "item_name": item_name, "stats": stats},
             sale_id=sale_id, listing_id=listing_id, t0=t0,
+            attribution=attribution, uid=uid,
         )
 
 
@@ -274,7 +276,8 @@ async def _mug_for(seller: Optional[Dict], total: int):
 
 
 async def _evaluate_alert(seller_id, seller: Optional[Dict], bot, last_item=None,
-                          sale_id=None, listing_id=None, t0=None) -> None:
+                          sale_id=None, listing_id=None, t0=None,
+                          attribution=None, uid=None) -> None:
     window = await _cfg("sale_window_seconds", config.SALE_WINDOW_SECONDS)
     win = await db.seller_window(seller_id, window)
     if win["total"] <= 0:
@@ -351,14 +354,22 @@ async def _evaluate_alert(seller_id, seller: Optional[Dict], bot, last_item=None
     else:
         variant = "mug"
     hospitalize = await _is_hospitalize_faction(seller)
-    silent = bool((delist_secs is not None and delist_mode == "silent") or hosp_far)
+    # An inferred seller was never observed selling anything — they won this uid at auction and
+    # nothing since says they parted with it. Its own mode decides whether that is worth a ping.
+    anon_match = None
+    silent_anon = False
+    if attribution == "auction":
+        anon_match = await db.get_anon_match(uid) if uid else None
+        silent_anon = (await anon_match_decision(anon_match))["silent"]
+    silent = bool((delist_secs is not None and delist_mode == "silent") or hosp_far or silent_anon)
     log.info("mug-eval seller=%s: POST alert variant=%s value=%s hospitalize=%s delist=%s mode=%s silent=%s",
              seller_id, variant, win["total"], hospitalize,
              delist_secs if delist_secs is not None else "-", delist_mode, silent)
     if bot is not None:
         event = _build_event(seller_id, seller, win, res, variant=variant, last_item=last_item,
                              hospitalize=hospitalize, protection_pct=protection_pct,
-                             delist_active_secs=delist_secs)
+                             delist_active_secs=delist_secs,
+                             attribution=attribution, anon_match=anon_match)
         event["silent"] = silent
         _post_t = time.monotonic()
         await bot.post_mug_alert(event)
@@ -517,7 +528,8 @@ def _delist_active_secs(seller: Optional[Dict], listing_id, tag_secs) -> Optiona
 
 
 def _build_event(seller_id, seller: Optional[Dict], win: Dict, res, *, variant="mug",
-                 last_item=None, hospitalize=False, protection_pct=0, delist_active_secs=None) -> Dict:
+                 last_item=None, hospitalize=False, protection_pct=0, delist_active_secs=None,
+                 attribution=None, anon_match=None) -> Dict:
     seller = seller or {}
     # Headline item for the embed: the sale that triggered this, else the most recent in the window.
     headline = last_item or {}
@@ -547,6 +559,11 @@ def _build_event(seller_id, seller: Optional[Dict], win: Dict, res, *, variant="
         "hospitalize": bool(hospitalize),
         "protection_pct": protection_pct,   # mug-protection reduction applied (%)
         "delist_active_secs": delist_active_secs,  # set => "⚠️ Likely de-list" (seller active Ns ago)
+        # "auction" => the seller was INFERRED from an AH win, never observed. The embed must say
+        # so: acting on an inference and acting on a capture are different decisions, and they
+        # must not look the same at a glance.
+        "attribution": attribution,
+        "anon_match": anon_match,
         "in_clothing_store": bool(seller.get("in_clothing_store")),
         # Only claim "Was Mugged" if the hospital REASON actually says so — being in hospital for
         # any other reason (self-hosp, attacked, medical) is NOT a mug.
