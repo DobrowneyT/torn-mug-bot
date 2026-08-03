@@ -356,6 +356,26 @@ which is a no-op insert.
 Unlike `forward`, it is bounded by wall clock rather than page count — the length of a history
 download is precisely the number we are trying to measure, so capping pages would mean guessing it.
 
+### Using the ledger for other things
+
+`mug_ah.db` is standalone — no foreign keys into `mug_bot.db`, no application state beyond
+`ah_state` and `ah_runs`. Read it with anything. Indexes on `(uid, ended_at)`, `(item_id, ended_at)`,
+`(buyer_id, ended_at)` and `ended_at` make per-item price history and per-player buying history both
+cheap, and WAL means a reader never blocks the scraper.
+
+**Every field Torn returns is stored**, including all four stats and the full `bonuses` array as raw
+JSON. Only `_metadata` (pagination links) is discarded.
+
+Rows are dropped in exactly one case: no `id` or no `timestamp`, which is malformed rather than
+meaningful. Auctions that **ended unsold** are kept with `buyer_id NULL` — they transfer no
+ownership, so every ownership lookup filters them out, but they are real market signal (a reserve
+nobody met) and cannot be recovered once they age out of Torn's window.
+
+Undatable rows (`timestamp` before `MUG_AH_MIN_TIMESTAMP`) are also dropped — see above.
+
+If you publish anything derived from this, note that it is named players' purchase history, and that
+`buyer_id IS NOT NULL` is the filter for "actually sold".
+
 ### Resolving anonymous listings (`match`)
 
 Cross-references every un-attributed uid — anonymous, or on the market with no captured seller —

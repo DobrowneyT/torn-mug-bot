@@ -235,3 +235,93 @@ def test_overused_uids_are_reportable(tmp_path, monkeypatch):
             "sentinel": config.AH_MAX_UID_REUSE + 3}
 
     _both(scenario, tmp_path, monkeypatch, "o")
+
+
+# --------------------------------- unsold auctions --------------------------------------
+
+def test_an_unsold_auction_never_becomes_an_owner(tmp_path, monkeypatch):
+    """Kept for market analysis, but it transferred nothing. If an ownership lookup returned one,
+    #12 would attribute an anonymous listing to a buyer that does not exist."""
+    async def scenario():
+        now = int(time.time())
+        await db.mark_anon_uid(uid="u", item_name="M", stat=1.0, accuracy=1.0, price=1)
+        sold = _win(1, "u", 500, now - 100 * DAY)
+        unsold = dict(_win(2, "u", None, now - DAY), buyer_name=None)   # newer, but no buyer
+        await ah_db.record_auctions([sold, unsold])
+        assert await ah_db.count_auctions() == 2, "the unsold auction must still be STORED"
+
+        # the newest row is the unsold one; ownership must fall back to the last real transfer
+        assert (await ah_db.owner_of_uid("u"))["buyer_id"] == 500
+        await ah_scraper.run_match()
+        m = await db.get_anon_match("u")
+        assert m["buyer_id"] == 500 and m["age_days"] == 100
+
+    _both(scenario, tmp_path, monkeypatch, "u")
+
+
+def test_a_uid_with_only_unsold_auctions_resolves_to_nothing(tmp_path, monkeypatch):
+    async def scenario():
+        now = int(time.time())
+        await db.mark_anon_uid(uid="u", item_name="M", stat=1.0, accuracy=1.0, price=1)
+        await ah_db.record_auctions([dict(_win(1, "u", None, now - DAY), buyer_name=None)])
+        assert await ah_db.owner_of_uid("u") is None
+        assert (await ah_scraper.run_match())["resolved"] == 0
+
+    _both(scenario, tmp_path, monkeypatch, "v")
+
+
+def test_an_existing_ledger_is_migrated_to_allow_unsold(tmp_path):
+    """The live ledger predates this and has buyer_id NOT NULL. SQLite cannot ALTER that away, so
+    init_db rebuilds the table — and must not lose the 548k rows already in it."""
+    import sqlite3
+    path = str(tmp_path / "legacy.db")
+    con = sqlite3.connect(path)
+    con.executescript("""
+        CREATE TABLE auction_wins (
+            auction_id INTEGER PRIMARY KEY, uid TEXT, item_id INTEGER, item_name TEXT,
+            item_type TEXT, sub_type TEXT, damage REAL, accuracy REAL, armor REAL, quality REAL,
+            rarity TEXT, bonuses TEXT, seller_id INTEGER, seller_name TEXT,
+            buyer_id INTEGER NOT NULL, buyer_name TEXT, price INTEGER, bids INTEGER,
+            ended_at INTEGER NOT NULL, seen_at INTEGER NOT NULL);
+        INSERT INTO auction_wins VALUES
+            (1,'a',399,'M','Weapon','Rifle',1,1,NULL,1,NULL,NULL,1,'s',500,'b',10,1,1700000000,1),
+            (2,'b',399,'M','Weapon','Rifle',1,1,NULL,1,NULL,NULL,1,'s',600,'b',20,1,1700000001,1);
+    """)
+    con.commit()
+    con.close()
+
+    async def scenario():
+        await ah_db.init_db(path)
+        try:
+            assert await ah_db.count_auctions() == 2, "migration lost rows"
+            assert (await ah_db.owner_of_uid("a"))["buyer_id"] == 500
+            # the constraint is gone: an unsold auction now inserts
+            await ah_db.record_auctions([{
+                "auction_id": 3, "uid": "c", "item_id": 399, "item_name": "M", "item_type": None,
+                "sub_type": None, "damage": None, "accuracy": None, "armor": None, "quality": None,
+                "rarity": None, "bonuses": None, "seller_id": 1, "seller_name": "s",
+                "buyer_id": None, "buyer_name": None, "price": 1, "bids": 1,
+                "ended_at": 1_700_000_002,
+            }])
+            assert await ah_db.count_auctions() == 3
+            assert (await ah_db.stats())["unsold"] == 1
+        finally:
+            await ah_db.close_db()
+
+    asyncio.run(scenario())
+
+
+def test_the_migration_is_idempotent(tmp_path):
+    """It runs on every start, so a second pass must be a PRAGMA and nothing else."""
+    async def scenario():
+        path = str(tmp_path / "twice.db")
+        await ah_db.init_db(path)
+        await ah_db.record_auctions([_win(1, "a", 500, 1_700_000_000)])
+        await ah_db.close_db()
+        await ah_db.init_db(path)
+        try:
+            assert await ah_db.count_auctions() == 1
+        finally:
+            await ah_db.close_db()
+
+    asyncio.run(scenario())

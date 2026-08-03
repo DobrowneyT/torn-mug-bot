@@ -97,12 +97,24 @@ def test_normalize_maps_a_stackable_auction():
     assert row["damage"] is None and row["bonuses"] is None
 
 
-def test_normalize_drops_rows_with_no_buyer():
-    """An auction that expired unsold transfers nothing. The spec marks `buyer` required, but a
-    NOT NULL failure mid-page would abort a whole scrape over a row we did not want anyway."""
-    assert ah_scraper.normalize(_api_row(9, 1_700_000_000, buyer=False)) is None
-    assert ah_scraper.normalize({"id": 1, "timestamp": 1, "buyer": {"id": 0}}) is None
+def test_normalize_keeps_unsold_auctions_with_a_null_buyer():
+    """An auction that ended unsold transfers no ownership, but it is real market signal — a
+    reserve nobody met — and it cannot be recovered once it ages out of Torn's window. Kept, with
+    buyer_id NULL, and filtered out of every ownership lookup instead."""
+    unsold = ah_scraper.normalize(_api_row(9, 1_700_000_000, buyer=False))
+    assert unsold is not None
+    assert unsold["buyer_id"] is None and unsold["buyer_name"] is None
+    assert unsold["price"] == 1_000_000 and unsold["item_id"] == 399    # the rest still lands
+
+    # buyer id 0 means the same thing as no buyer at all
+    zero = ah_scraper.normalize({"id": 1, "timestamp": 1_700_000_000, "buyer": {"id": 0}})
+    assert zero is not None and zero["buyer_id"] is None
+
+
+def test_normalize_still_drops_rows_it_cannot_place():
+    """No id or no timestamp is malformed, not unsold — nothing can be done with those."""
     assert ah_scraper.normalize({"id": 1, "buyer": {"id": 5}}) is None          # no timestamp
+    assert ah_scraper.normalize({"timestamp": 1_700_000_000, "buyer": {"id": 5}}) is None
 
 
 # --------------------------------- forward ---------------------------------------------

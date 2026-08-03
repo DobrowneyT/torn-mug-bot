@@ -38,7 +38,11 @@ CREATE TABLE IF NOT EXISTS auction_wins (
     bonuses     TEXT,                  -- raw JSON array as returned
     seller_id   INTEGER,
     seller_name TEXT,
-    buyer_id    INTEGER NOT NULL,      -- rows without a buyer are dropped at ingest, not stored
+    -- NULL = the auction ENDED UNSOLD. Kept rather than dropped: it transfers no ownership, so
+    -- it is useless for #12, but it is real market signal (a reserve nobody met) and it cannot be
+    -- recovered once it ages out of Torn's window. Every ownership lookup filters it out — see
+    -- owner_of_uid and wins_for_uids.
+    buyer_id    INTEGER,
     buyer_name  TEXT,
     price       INTEGER,
     bids        INTEGER,

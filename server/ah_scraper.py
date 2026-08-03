@@ -54,16 +54,16 @@ def normalize(row: Dict) -> Optional[Dict]:
     branch reuses the SAME schema the itemmarket endpoint returns, so stats/bonuses/rarity land in
     the shapes the rest of the codebase already expects.
 
-    Rows without a buyer are dropped rather than stored. The spec marks `buyer` required, but an
-    auction that expired unsold has nobody to attribute the item to, and specs are routinely
-    optimistic about this — a row with a null buyer would otherwise become a NOT NULL failure that
-    aborts a whole page mid-scrape.
+    An auction with no buyer ENDED UNSOLD. It is kept, with buyer_id NULL. It transfers no
+    ownership so it is useless for #12 — every ownership lookup filters it out — but it is real
+    market signal (a reserve nobody met) and, unlike anything derivable, it cannot be recovered once
+    it ages out of Torn's window. The spec marks `buyer` required; it is evidently optimistic.
     """
     buyer = row.get("buyer") or {}
-    buyer_id = buyer.get("id")
+    buyer_id = buyer.get("id") or None          # 0 and absent both mean "nobody bought it"
     auction_id = row.get("id")
     ended_at = row.get("timestamp")
-    if not buyer_id or not auction_id or not ended_at:
+    if not auction_id or not ended_at:
         return None
     # Torn serves some rows with an epoch-adjacent timestamp — real auction, real buyer, unusable
     # date. Dropped rather than stored: ownership is "most recent wins" and confidence is a function
@@ -102,8 +102,8 @@ def normalize(row: Dict) -> Optional[Dict]:
         "bonuses": json.dumps(bonuses) if bonuses else None,
         "seller_id": seller.get("id"),
         "seller_name": seller.get("name"),
-        "buyer_id": int(buyer_id),
-        "buyer_name": buyer.get("name"),
+        "buyer_id": int(buyer_id) if buyer_id else None,
+        "buyer_name": buyer.get("name") if buyer_id else None,
         "price": row.get("price"),
         "bids": row.get("bids"),
         "ended_at": int(ended_at),
@@ -358,7 +358,8 @@ async def show_status() -> None:
     s = await ah_db.stats()
     span_days = ((s["newest"] - s["oldest"]) / 86400) if s["oldest"] and s["newest"] else 0
     print(f"ledger:      {ah_db.db_path()}")
-    print(f"auctions:    {s['rows']:,}  ({s['with_uid']:,} with a uid, {s['buyers']:,} distinct buyers)")
+    print(f"auctions:    {s['rows']:,}  ({s['with_uid']:,} with a uid, {s['buyers']:,} distinct buyers, "
+          f"{s['unsold'] or 0:,} ended unsold)")
     print(f"covering:    {_fmt_ts(s['oldest'])}  ->  {_fmt_ts(s['newest'])}   ({span_days:.1f} days)")
     print(f"backfill:    {'complete' if s['backfill_complete'] else 'incomplete'}")
     print("recent runs:")
