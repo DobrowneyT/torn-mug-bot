@@ -27,6 +27,7 @@ many pages. If ever unsure, ask Torn staff (the announcement invites it).
 main.py            entrypoint: uvicorn + discord.py on one asyncio loop
 config.py          thresholds, windows, channel ids, Torn URLs
 server/            FastAPI ingest (app.py), SQLite (db.py, schema.sql)
+                   attribution.py — given a uid, who owns it and how well we know it
 bot/               discord_bot.py (live), formatter.py (embeds), state.py, mock_data.py
 scratch/           format_preview.py (mock embeds), dumps/ (raw payload captures)
 deploy/            provision.sh (once per box), update.sh (every deploy)

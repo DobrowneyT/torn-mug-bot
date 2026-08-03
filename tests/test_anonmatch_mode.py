@@ -9,7 +9,7 @@ discard thousands of usable matches to avoid a minority of wrong ones.
 import asyncio
 
 import config
-from server import ah_scraper, db, detection
+from server import ah_scraper, attribution, db
 
 
 def _match(confidence):
@@ -63,7 +63,7 @@ def test_default_mode_is_silent(tmp_path, monkeypatch):
     assert config.ANONMATCH_MODE == "silent"
 
     async def scenario():
-        d = await detection.anon_match_decision(_match(0.99))
+        d = await attribution.decide_anon(_match(0.99))
         assert d["use"] is True and d["silent"] is True
 
     _run(scenario, tmp_path, monkeypatch)
@@ -73,7 +73,7 @@ def test_off_declines_to_infer_at_all(tmp_path, monkeypatch):
     """`off` must reproduce today's behaviour exactly — an anonymous uid stays a dead end."""
     async def scenario():
         await db.set_config("anonmatch_mode", "off")
-        d = await detection.anon_match_decision(_match(0.99))
+        d = await attribution.decide_anon(_match(0.99))
         assert d["use"] is False
 
     _run(scenario, tmp_path, monkeypatch, "b.db")
@@ -86,10 +86,10 @@ def test_ping_is_gated_on_confidence(tmp_path, monkeypatch):
         await db.set_config("anonmatch_mode", "ping")
         await db.set_config("anonmatch_min_confidence", 0.88)
 
-        strong = await detection.anon_match_decision(_match(0.923))
+        strong = await attribution.decide_anon(_match(0.923))
         assert strong["use"] is True and strong["silent"] is False
 
-        weak = await detection.anon_match_decision(_match(0.693))
+        weak = await attribution.decide_anon(_match(0.693))
         assert weak["use"] is True and weak["silent"] is True, "a weak match must not be dropped"
         assert "0.69" in weak["reason"] and "0.88" in weak["reason"]
 
@@ -100,18 +100,18 @@ def test_the_threshold_is_inclusive_at_the_boundary(tmp_path, monkeypatch):
     async def scenario():
         await db.set_config("anonmatch_mode", "ping")
         await db.set_config("anonmatch_min_confidence", 0.88)
-        assert (await detection.anon_match_decision(_match(0.88)))["silent"] is False
-        assert (await detection.anon_match_decision(_match(0.879)))["silent"] is True
+        assert (await attribution.decide_anon(_match(0.88)))["silent"] is False
+        assert (await attribution.decide_anon(_match(0.879)))["silent"] is True
 
     _run(scenario, tmp_path, monkeypatch, "d.db")
 
 
 def test_no_match_is_not_an_alert(tmp_path, monkeypatch):
     async def scenario():
-        assert (await detection.anon_match_decision(None))["use"] is False
+        assert (await attribution.decide_anon(None))["use"] is False
         # a row with no confidence recorded must not be treated as certain
         await db.set_config("anonmatch_mode", "ping")
-        d = await detection.anon_match_decision({"uid": "u", "buyer_id": 1})
+        d = await attribution.decide_anon({"uid": "u", "buyer_id": 1})
         assert d["use"] is True and d["silent"] is True
 
     _run(scenario, tmp_path, monkeypatch, "e.db")
@@ -120,11 +120,11 @@ def test_no_match_is_not_an_alert(tmp_path, monkeypatch):
 def test_mode_is_live_tunable_without_a_restart(tmp_path, monkeypatch):
     """Same contract as /delist and /hosplock: the config table wins over the env default."""
     async def scenario():
-        assert (await detection.anon_match_decision(_match(0.95)))["silent"] is True
+        assert (await attribution.decide_anon(_match(0.95)))["silent"] is True
         await db.set_config("anonmatch_mode", "ping")
-        assert (await detection.anon_match_decision(_match(0.95)))["silent"] is False
+        assert (await attribution.decide_anon(_match(0.95)))["silent"] is False
         await db.set_config("anonmatch_mode", "off")
-        assert (await detection.anon_match_decision(_match(0.95)))["use"] is False
+        assert (await attribution.decide_anon(_match(0.95)))["use"] is False
 
     _run(scenario, tmp_path, monkeypatch, "f.db")
 

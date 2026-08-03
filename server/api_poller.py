@@ -19,7 +19,7 @@ import time
 import httpx
 
 import config
-from server import db, deal_finder, detection, torn
+from server import attribution, db, deal_finder, detection, torn
 from server import keys as keypool
 
 log = logging.getLogger("mug.poller")
@@ -301,66 +301,40 @@ async def reconcile_gear(bot, item_id, current: dict, item_label=None, complete:
     # Per-poll disposition tally (logged below; helps diagnose "weapons won't leave the list").
     stats_n = {"tracked": 0, "uid": 0, "auction": 0, "price": 0, "anon": 0, "unmatched": 0}
 
+    # Which resolution source a uid came from, in the tally's own words. `uid` predates the
+    # attribution module and is what the log line has always called a direct capture.
+    _TALLY = {attribution.MATCHER: "uid", attribution.AUCTION: "auction"}
+
     for uid, info in current.items():
         if uid in tracked:
-            seller_id = tracked[uid].get("seller_id")
-            attribution = tracked[uid].get("attribution")
-            # A direct capture that arrives AFTER an inference has to replace it. This branch
-            # short-circuits the whole resolution chain below, so without an explicit upgrade here
-            # the FIRST answer wins for the life of the listing — and the first answer is the
-            # weaker one. That is the invalidation rule #12 turns on, and it is invisible when it
-            # fails: the alert still fires, just naming the wrong player.
-            if attribution == "auction" and uid in uid_map:
-                log.info("uid=%s: item-matcher captured seller=%s — replacing the AH inference (%s)",
-                         uid, uid_map[uid]["seller_id"], seller_id)
-                seller_id = uid_map[uid]["seller_id"]
-                attribution = "matcher"
+            # Already attributed, but re-checked: a direct capture arriving after an inference has
+            # to replace it, and this branch returns before the resolution chain runs.
+            attrib = attribution.upgrade(
+                attribution.Attribution(seller_id=tracked[uid].get("seller_id"),
+                                        source=tracked[uid].get("attribution")),
+                uid, uid_map)
             await db.upsert_tracked_gear(  # resets misses, refreshes last_seen
                 uid=uid, item_id=item_id, item_name=tracked[uid].get("item_name"),
-                price=info["price"], seller_id=seller_id,
+                price=info["price"], seller_id=attrib.seller_id,
                 stats_json=tracked[uid].get("stats_json"),
-                attribution=attribution,
+                attribution=attrib.source,
             )
             stats_n["tracked"] += 1
             continue
 
-        seller_id = None
-        item_name = None
-        how = None
-        # GEAR is attributed to a seller ONLY by exact uid (armouryID == API item_details.uid). There
-        # is deliberately NO price fallback: matching by price alone pins one player's weapon onto
-        # another who listed at the same round price (the $300M Swiss Army Knife mis-match). An
-        # uncaptured uid stays unmatched until the item-matcher captures its seller — that's fine.
-        if uid in uid_map:
-            seller_id = uid_map[uid]["seller_id"]
-            item_name = uid_map[uid].get("item_name")
-            how = "uid"
+        attrib = await attribution.resolve(uid, uid_map, item_label=item_label)
+        if config.DEBUG_GEAR and attrib.source == attribution.AUCTION:
+            log.info("  uid=%s ANON-MATCH -> seller=%s (%s, %s)",
+                     uid, attrib.seller_id, attrib.seller_name, attrib.reason)
 
-        # No direct capture. Before writing this off as an anonymous dead end, ask the auction
-        # house: if this uid was won at auction and nothing since says otherwise, the person
-        # listing it anonymously is the winner. Deliberately AFTER uid_map — a direct capture is
-        # stronger evidence and must never be overridden by an inference.
-        attribution = "matcher" if seller_id else None
-        if not seller_id:
-            match = await db.get_anon_match(uid)
-            decision = await detection.anon_match_decision(match)
-            if decision["use"]:
-                seller_id = match["buyer_id"]
-                item_name = item_label
-                attribution = "auction"
-                how = "auction"
-                if config.DEBUG_GEAR:
-                    log.info("  uid=%s ANON-MATCH -> seller=%s (%s, %s)",
-                             uid, seller_id, match.get("buyer_name"), decision["reason"])
-
-        if seller_id:
+        if attrib.matched:
             await db.upsert_tracked_gear(
-                uid=uid, item_id=item_id, item_name=item_name, price=info["price"],
-                seller_id=seller_id, attribution=attribution,
+                uid=uid, item_id=item_id, item_name=attrib.item_name, price=info["price"],
+                seller_id=attrib.seller_id, attribution=attrib.source,
                 stats_json=json.dumps(info.get("stats")) if info.get("stats") else None,
             )
             await db.remove_unmatched_gear(uid)
-            stats_n[how] += 1
+            stats_n[_TALLY[attrib.source]] += 1
         elif uid in anon:
             await db.remove_unmatched_gear(uid)              # anonymous -> stash + ignore
             stats_n["anon"] += 1
