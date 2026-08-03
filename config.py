@@ -143,6 +143,9 @@ AH_MAX_UID_REUSE = int(os.environ.get("MUG_AH_MAX_UID_REUSE", "50"))
 # None means UNMEASURED, and unmeasured means UNUSED — seller-side rows are excluded from matching
 # entirely until this is filled in from `ah_scrape.py calibrate`. That is deliberate: mixing an
 # uncalibrated source into a calibrated model is how a confidence number stops meaning anything.
+# MEASURED OUTCOME 2026-08-03: this stays None, and probably permanently. Torn publishes almost no
+# expired auctions — at most 293 across 553,907 rows, some of them 2013 seed data — so there is no
+# sample to calibrate against. The idea was sound; the data does not exist. See #44.
 AH_SELLER_CONFIDENCE_BANDS = None
 
 # ---- Anon-match alerts (seller INFERRED from an AH win, not captured) ----

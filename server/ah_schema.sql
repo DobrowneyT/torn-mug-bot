@@ -38,10 +38,13 @@ CREATE TABLE IF NOT EXISTS auction_wins (
     bonuses     TEXT,                  -- raw JSON array as returned
     seller_id   INTEGER,
     seller_name TEXT,
-    -- NULL = the auction ENDED UNSOLD. Kept rather than dropped: it transfers no ownership, so
-    -- it is useless for #12, but it is real market signal (a reserve nobody met) and it cannot be
-    -- recovered once it ages out of Torn's window. Every ownership lookup filters it out — see
-    -- owner_of_uid and wins_for_uids.
+    -- NULL = the auction ENDED UNSOLD. Kept rather than dropped: it transfers no ownership, so it
+    -- is useless for #12, but it is real market signal (a reserve nobody met). Every ownership
+    -- lookup filters it out — see owner_of_uid and wins_for_uids.
+    --
+    -- Measured 2026-08-03: these are RARE. At most 293 across 553,907 rows (0.05%), and some of
+    -- those are 2013 seed data. Modern Torn evidently does not publish expired auctions, so do not
+    -- expect this column to support any analysis on its own.
     buyer_id    INTEGER,
     buyer_name  TEXT,
     price       INTEGER,

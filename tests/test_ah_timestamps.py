@@ -224,19 +224,17 @@ def test_year_histogram_is_empty_for_an_empty_ledger(tmp_path, capsys):
 # --------------------------------- active vs ended-unsold -------------------------------
 
 def test_probe_distinguishes_a_running_auction_from_one_that_ended_unsold(capsys, monkeypatch):
-    """A row with no buyer is ambiguous and the two readings mean opposite things:
+    """A row with no buyer is ambiguous, and the schema cannot disambiguate it — so the probe reads
+    it off `timestamp` and says which reading each row supports.
 
-      ended unsold  a completed event — the seller kept it, historical evidence that decays
-      still active  not an event — the seller holds it RIGHT NOW, the freshest evidence there is,
-                    but transient, and recording it as "unsold" asserts an outcome that has not
-                    happened
-
-    The schema cannot tell them apart, so the probe reads it off `timestamp` and says which.
+    Against live Torn the answer was "neither": the epoch rows are 2013 seed data on staff accounts,
+    and the feed carries no active auctions at all. The probe still has to handle a future timestamp
+    correctly, because that is the case that would prove otherwise if Torn ever changes.
     """
     now = int(time.time())
     rows = [
         dict(_api_row(1, now + 7200), buyer=None),          # ends in 2h -> running
-        dict(_api_row(2, 1), buyer=None),                   # no end time -> probably running
+        dict(_api_row(2, 1), buyer=None),                   # epoch -> 2013 seed data
         dict(_api_row(3, now - 30 * 86400), buyer=None),    # real past date -> genuinely unsold
     ]
     for r in rows:
@@ -251,7 +249,7 @@ def test_probe_distinguishes_a_running_auction_from_one_that_ended_unsold(capsys
     out = capsys.readouterr().out
 
     assert "3 without a buyer" in out
-    assert "STILL RUNNING" in out
+    assert "STILL RUNNING" in out          # the future-dated row
     assert "FUTURE" in out
     assert "genuinely ENDED UNSOLD" in out
 
