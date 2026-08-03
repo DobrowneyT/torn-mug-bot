@@ -190,8 +190,13 @@ async def wins_for_uids(uids) -> Dict[str, Dict]:
         chunk = keys[i:i + 500]
         placeholders = ",".join("?" * len(chunk))
         cur = await _db.execute(
-            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) ORDER BY ended_at DESC",
-            chunk,
+            # Sentinel uids are filtered here rather than at the call sites, so no caller can
+            # forget: a uid on tens of thousands of auctions is not an item, and returning it would
+            # attribute unrelated listings to whoever last "won" it.
+            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) AND uid NOT IN "
+            f"(SELECT uid FROM auction_wins WHERE uid IS NOT NULL GROUP BY uid HAVING COUNT(*) > ?) "
+            f"ORDER BY ended_at DESC",
+            chunk + [config.AH_MAX_UID_REUSE],
         )
         for row in await cur.fetchall():
             out.setdefault(row["uid"], dict(row))
@@ -211,8 +216,13 @@ async def all_wins_for_uids(uids) -> Dict[str, List[Dict]]:
         chunk = keys[i:i + 500]
         placeholders = ",".join("?" * len(chunk))
         cur = await _db.execute(
-            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) ORDER BY ended_at DESC",
-            chunk,
+            # Sentinel uids are filtered here rather than at the call sites, so no caller can
+            # forget: a uid on tens of thousands of auctions is not an item, and returning it would
+            # attribute unrelated listings to whoever last "won" it.
+            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) AND uid NOT IN "
+            f"(SELECT uid FROM auction_wins WHERE uid IS NOT NULL GROUP BY uid HAVING COUNT(*) > ?) "
+            f"ORDER BY ended_at DESC",
+            chunk + [config.AH_MAX_UID_REUSE],
         )
         for row in await cur.fetchall():
             out.setdefault(row["uid"], []).append(dict(row))
@@ -230,23 +240,52 @@ def win_as_of(wins: List[Dict], ts: int) -> Optional[Dict]:
     return None
 
 
-async def uid_turnover() -> Dict[str, int]:
+async def overused_uids(threshold: int) -> Dict[str, int]:
+    """uids appearing more times than any physical item plausibly could — {uid: count}.
+
+    A uid identifies one item, so a uid on hundreds of auctions is a sentinel Torn uses for items
+    that have no real one. The live ledger contains a single uid on 49,435 auctions: 9% of every
+    row on record, and 28% of all repeat-gap measurements. Matching on it would attribute a huge
+    number of unrelated listings to whoever last "won" it, and it dominates any turnover statistic
+    computed without excluding it.
+    """
+    cur = await _db.execute(
+        "SELECT uid, COUNT(*) AS n FROM auction_wins WHERE uid IS NOT NULL "
+        "GROUP BY uid HAVING n > ? ORDER BY n DESC",
+        (threshold,),
+    )
+    return {r[0]: r[1] for r in await cur.fetchall()}
+
+
+async def uid_turnover(max_reuse: Optional[int] = None) -> Dict[str, int]:
     """How often a uid is auctioned more than once — the evidence-staleness question.
 
     #12 trusts "this uid was won at auction and nothing since says otherwise". How safe that is
     depends on how quickly items change hands, which is measurable here rather than guessable.
+
+    `max_reuse` excludes sentinel uids. Without it the live ledger's 49,435x uid contributes 28% of
+    every gap measured, so the "median days apart" figure describes that one sentinel rather than
+    the market.
     """
+    cap = config.AH_MAX_UID_REUSE if max_reuse is None else max_reuse
     cur = await _db.execute(
         "SELECT n, COUNT(*) FROM (SELECT COUNT(*) AS n FROM auction_wins "
-        "WHERE uid IS NOT NULL GROUP BY uid) GROUP BY n ORDER BY n"
+        "WHERE uid IS NOT NULL GROUP BY uid HAVING n <= ?) GROUP BY n ORDER BY n",
+        (cap,),
     )
     return {f"seen_{r[0]}x": r[1] for r in await cur.fetchall()}
 
 
-async def median_days_between_wins() -> Optional[float]:
-    """Median gap between consecutive auctions of the SAME uid, in days. None if too few repeats."""
+async def median_days_between_wins(max_reuse: Optional[int] = None) -> Optional[float]:
+    """Median gap between consecutive auctions of the SAME uid, in days. None if too few repeats.
+
+    Sentinel uids are excluded — see uid_turnover. Including them measures the sentinel."""
+    cap = config.AH_MAX_UID_REUSE if max_reuse is None else max_reuse
     cur = await _db.execute(
-        "SELECT uid, ended_at FROM auction_wins WHERE uid IS NOT NULL ORDER BY uid, ended_at"
+        "SELECT uid, ended_at FROM auction_wins WHERE uid IS NOT NULL AND uid IN "
+        "(SELECT uid FROM auction_wins WHERE uid IS NOT NULL GROUP BY uid HAVING COUNT(*) <= ?) "
+        "ORDER BY uid, ended_at",
+        (cap,),
     )
     gaps: List[int] = []
     prev_uid = prev_ts = None

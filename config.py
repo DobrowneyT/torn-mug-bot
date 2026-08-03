@@ -115,6 +115,25 @@ AH_PAGE_DELAY_SECONDS = float(os.environ.get("MUG_AH_PAGE_DELAY", "0.5"))
 # the cursor as well as the data. 2004 is when Torn launched; nothing before it can be genuine.
 AH_MIN_TIMESTAMP = int(os.environ.get("MUG_AH_MIN_TIMESTAMP", "1072915200"))   # 2004-01-01Z
 
+# P(the AH-inferred owner is still the actual seller), by how old that evidence is. MEASURED, not
+# chosen — from `ah_scrape.py calibrate` over 13,090 comparisons against directly-observed sellers
+# on 2026-08-03. Re-derive it periodically; the shape is a property of how players behave, not a
+# constant. (max_age_days, accuracy), ascending, last entry open-ended.
+AH_CONFIDENCE_BANDS = (
+    (1, 0.923),      # 1,813 checked
+    (7, 0.880),      # 2,023
+    (30, 0.787),     # 2,289
+    (90, 0.754),     # 2,736
+    (365, 0.693),    # 3,041
+    (None, 0.583),   # 1,188
+)
+# A uid identifies one physical item, so it cannot legitimately be auctioned hundreds of times.
+# Torn's live ledger contains a single uid appearing 49,435 times — 9% of every auction on record —
+# which is a sentinel for items that have no real uid, not an item. Matching on it would attribute a
+# vast number of unrelated listings to whoever last "won" it. Anything above this is excluded from
+# matching and from the turnover statistics, which it otherwise dominates.
+AH_MAX_UID_REUSE = int(os.environ.get("MUG_AH_MAX_UID_REUSE", "50"))
+
 # ---- Logging ----
 # Level for OUR loggers (mug.*). httpx/httpcore are pinned to WARNING regardless: they log the full
 # request URL, and the Torn key is a query parameter, so at INFO they write live credentials into

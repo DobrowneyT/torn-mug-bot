@@ -140,7 +140,9 @@ print_cron() {
   echo
   echo "==> the auction house scraper is a SEPARATE cron job (optional — see README):"
   echo
-  echo "  */10 * * * * cd $repo_dir && ./.venv/bin/python ah_scrape.py forward >> /var/log/mug-bot-ah.log 2>&1"
+  echo "  15,45 * * * * cd $repo_dir && ./.venv/bin/python ah_scrape.py forward >> /var/log/mug-bot-ah.log 2>&1"
+  echo
+  echo "  (that also runs the match step, which resolves anon uids against the ledger)"
   echo
   echo "  (check it first:  cd $repo_dir && ./.venv/bin/python ah_scrape.py probe)"
 }

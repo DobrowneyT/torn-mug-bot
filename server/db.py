@@ -669,6 +669,62 @@ async def record_sale(*, listing_id, item_id, item_name, seller_id, qty_sold,
     return cur.lastrowid
 
 
+async def replace_anon_matches(rows: List[Dict], keep_uids) -> Dict[str, int]:
+    """Write the AH-inferred owners, and drop any that no longer apply. One transaction.
+
+    `keep_uids` is every uid still eligible for inference — anonymous, or on the market with no
+    captured seller. A uid absent from it has since been attributed directly, and DIRECT EVIDENCE
+    BEATS INFERRED: leaving the row would keep blaming an old auction winner for a listing whose
+    real seller we now know. That deletion is the invalidation rule #12 depends on, so it lives here
+    rather than being left to the caller to remember.
+    """
+    now = _now()
+    keep = {str(u) for u in keep_uids}
+    async with batch():
+        cur = await _db.execute("SELECT uid FROM anon_matches")
+        stale = [(u,) for (u,) in await cur.fetchall() if u not in keep]
+        if stale:
+            await _db.executemany("DELETE FROM anon_matches WHERE uid=?", stale)
+        if rows:
+            await _db.executemany(
+                """INSERT INTO anon_matches(uid, buyer_id, buyer_name, auction_id, price,
+                                            won_at, age_days, confidence, matched_at)
+                   VALUES (?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(uid) DO UPDATE SET
+                       buyer_id=excluded.buyer_id, buyer_name=excluded.buyer_name,
+                       auction_id=excluded.auction_id, price=excluded.price,
+                       won_at=excluded.won_at, age_days=excluded.age_days,
+                       confidence=excluded.confidence, matched_at=excluded.matched_at""",
+                [(str(r["uid"]), r["buyer_id"], r.get("buyer_name"), r.get("auction_id"),
+                  r.get("price"), r["won_at"], r.get("age_days"), r.get("confidence"), now)
+                 for r in rows],
+            )
+    return {"written": len(rows), "dropped": len(stale)}
+
+
+async def get_anon_match(uid) -> Optional[Dict]:
+    """The AH-inferred owner for a uid, if we have one. The poller's lookup in #12."""
+    if uid is None:
+        return None
+    cur = await _db.execute("SELECT * FROM anon_matches WHERE uid=?", (str(uid),))
+    row = await cur.fetchone()
+    return dict(row) if row else None
+
+
+async def anon_match_summary() -> Dict:
+    cur = await _db.execute(
+        "SELECT COUNT(*) AS n, AVG(confidence) AS avg_conf, MAX(matched_at) AS last "
+        "FROM anon_matches"
+    )
+    out = dict(await cur.fetchone())
+    cur = await _db.execute(
+        "SELECT COUNT(*) FROM anon_matches WHERE confidence >= ?",
+        (config.AH_CONFIDENCE_BANDS[1][1],),
+    )
+    out["high_confidence"] = (await cur.fetchone())[0]
+    return out
+
+
 async def observed_gear_owners() -> List[Dict]:
     """Every DIRECT observation of "uid X was listed by seller Y at time T" that we still hold.
 
