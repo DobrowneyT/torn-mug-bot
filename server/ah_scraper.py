@@ -8,6 +8,9 @@ Runs as a cron process, not inside the bot. Two modes:
             slow cron until it reports complete.
   coverage  report how much of the anonymous-uid backlog the ledger can de-anonymise (#12's
             go/no-go number). Reads both databases; makes no API calls.
+  calibrate report how often AH-inferred ownership would have been CORRECT, by evidence age,
+            measured against sellers we directly observed. This is what #12's confidence bands
+            should be derived from. Reads both databases; makes no API calls.
 
 Both are resumable: forward is capped by page count (catching up should never be large), backfill
 by wall clock (its length is exactly what we are trying to measure). An interrupted run loses
@@ -375,13 +378,94 @@ async def show_coverage() -> None:
     print("trusted — a uid that changes hands every few days cannot carry weeks-old evidence.")
 
 
+# Evidence-age buckets, in days. Chosen to straddle the ranges where the answer plausibly changes:
+# within a week, within a month, within a quarter, older. Not tuned to any result.
+_AGE_BUCKETS = ((0, 1), (1, 7), (7, 30), (30, 90), (90, 365), (365, None))
+
+
+def _bucket_label(lo, hi) -> str:
+    return f"{lo}-{hi}d" if hi is not None else f"{lo}d+"
+
+
+async def show_calibration() -> None:
+    """How often AH-inferred ownership would have been RIGHT, by how old the evidence was.
+
+    The auction house is a lossy observer: a uid also changes hands by trade, bazaar and item market,
+    none of which it sees. So "most recent AH win" is not "current owner" — it is a decaying
+    estimate, and the decay rate is the thing #12's confidence model has to be built on.
+
+    This measures it directly and retroactively. For every uid we have DIRECTLY observed a seller
+    for, we ask what the auction house would have claimed at that moment, and whether it matched.
+    No feedback loop, no waiting, no new collection — the answer is already in the data.
+
+    Read the accuracy column as: "if an anon-match alert had fired on evidence this old, this is the
+    fraction of the time it would have named the right player."
+    """
+    from server import db
+
+    observations = await db.observed_gear_owners()
+    if not observations:
+        print("no directly-observed gear owners yet — nothing to calibrate against.")
+        print("this fills in as the poller detects gear sales (sales rows with a 'uid:' listing_id).")
+        return
+
+    wins = await ah_db.all_wins_for_uids({o["uid"] for o in observations})
+    buckets = {b: [0, 0] for b in _AGE_BUCKETS}          # bucket -> [checked, agreed]
+    unknown = 0
+
+    for obs in observations:
+        history = wins.get(obs["uid"])
+        if not history:
+            unknown += 1
+            continue
+        win = ah_db.win_as_of(history, obs["observed_at"])
+        if win is None:
+            unknown += 1                                  # only auctioned AFTER we saw it
+            continue
+        age_days = (obs["observed_at"] - win["ended_at"]) / 86400
+        for bucket in _AGE_BUCKETS:
+            lo, hi = bucket
+            if age_days >= lo and (hi is None or age_days < hi):
+                buckets[bucket][0] += 1
+                buckets[bucket][1] += int(win["buyer_id"] == obs["seller_id"])
+                break
+
+    print("Calibration: would the AH-inferred owner have been the actual seller?")
+    print(f"({len(observations):,} direct observations; {unknown:,} had no prior AH win to test)")
+    print()
+    print(f"  {'evidence age':<14}{'checked':>9}{'agreed':>9}{'accuracy':>11}")
+    total_checked = total_agreed = 0
+    for bucket in _AGE_BUCKETS:
+        checked, agreed = buckets[bucket]
+        total_checked += checked
+        total_agreed += agreed
+        if not checked:
+            continue
+        print(f"  {_bucket_label(*bucket):<14}{checked:>9,}{agreed:>9,}"
+              f"{100.0 * agreed / checked:>10.1f}%")
+    if total_checked:
+        print(f"  {'overall':<14}{total_checked:>9,}{total_agreed:>9,}"
+              f"{100.0 * total_agreed / total_checked:>10.1f}%")
+    print()
+    if total_checked < 50:
+        print(f"NOT ENOUGH DATA — {total_checked} comparisons. Treat the above as a smoke test, not")
+        print("a calibration. This grows every time the poller detects a gear sale.")
+        return
+    print("Set the #12 confidence bands from the age at which accuracy stops being worth acting on.")
+    print("One caveat on the sample: it only covers uids that reached the ITEM MARKET, because that")
+    print("is the only place we observe a seller. A uid won at auction and kept forever never")
+    print("appears here — which is the right bias, since we only ever infer for uids we can see")
+    print("listed, but it does mean these numbers describe items that move.")
+
+
 async def cli(argv=None) -> int:
     """Entry point. Assumes .env is already loaded — see ah_scrape.py at the repo root."""
     from server import db
     from server import keys as keypool
 
     p = argparse.ArgumentParser(prog="ah_scrape", description="Torn auction house scraper")
-    p.add_argument("mode", choices=["forward", "backfill", "probe", "status", "coverage"],
+    p.add_argument("mode",
+                   choices=["forward", "backfill", "probe", "status", "coverage", "calibrate"],
                    nargs="?", default="forward")
     p.add_argument("--limit", type=int, default=None, help="rows per request (max 100)")
     p.add_argument("--max-pages", type=int, default=None, help="cap requests for this run")
@@ -396,11 +480,11 @@ async def cli(argv=None) -> int:
             await show_status()
             return 0
 
-        if args.mode == "coverage":
-            # Needs the main database too, but only to read uid sets — no keys, no API calls.
+        if args.mode in ("coverage", "calibrate"):
+            # Need the main database too, but only to read — no keys, no API calls.
             await db.init_db()
             try:
-                await show_coverage()
+                await (show_coverage() if args.mode == "coverage" else show_calibration())
             finally:
                 await db.close_db()
             return 0

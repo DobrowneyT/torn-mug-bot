@@ -669,6 +669,51 @@ async def record_sale(*, listing_id, item_id, item_name, seller_id, qty_sold,
     return cur.lastrowid
 
 
+async def observed_gear_owners() -> List[Dict]:
+    """Every DIRECT observation of "uid X was listed by seller Y at time T" that we still hold.
+
+    This is the ground truth for calibrating AH-inferred ownership: for each observation we can ask
+    what the auction house would have said at that moment, and whether it was right. It needs no
+    feedback loop and no new data collection — the record is already here.
+
+    Three sources, deliberately:
+      sales        historical, and the only one that survives a listing vanishing. Gear sales are
+                   recorded with listing_id "uid:<uid>", which makes the sales table an accidental
+                   but complete uid->seller log going back as far as the bot has run.
+      listings     the item-matcher's live captures, with the timestamp we first saw them.
+      tracked_gear the poller's live view, for uids whose listing row has since been replaced.
+
+    Duplicates across sources are fine — the caller buckets by evidence age, and the same
+    observation appearing twice does not bias the ratio it computes.
+    """
+    out: List[Dict] = []
+    cur = await _db.execute(
+        "SELECT listing_id, seller_id, sold_at FROM sales "
+        "WHERE listing_id LIKE 'uid:%' AND seller_id IS NOT NULL"
+    )
+    for row in await cur.fetchall():
+        out.append({"uid": row[0][4:], "seller_id": row[1], "observed_at": row[2],
+                    "source": "sale"})
+
+    cur = await _db.execute(
+        "SELECT armoury_uid, seller_id, COALESCE(created_at, updated_at) FROM listings "
+        "WHERE armoury_uid IS NOT NULL AND seller_id IS NOT NULL"
+    )
+    for row in await cur.fetchall():
+        if row[2]:
+            out.append({"uid": str(row[0]), "seller_id": row[1], "observed_at": row[2],
+                        "source": "listing"})
+
+    cur = await _db.execute(
+        "SELECT uid, seller_id, first_seen FROM tracked_gear WHERE seller_id IS NOT NULL"
+    )
+    for row in await cur.fetchall():
+        if row[2]:
+            out.append({"uid": str(row[0]), "seller_id": row[1], "observed_at": row[2],
+                        "source": "tracked"})
+    return out
+
+
 async def recent_sales_for(seller_id, item_id, since) -> List[Dict]:
     """This seller's sales of one item since `since` — the candidate set for cross-path dedup.
 
