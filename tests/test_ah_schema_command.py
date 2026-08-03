@@ -93,7 +93,9 @@ def test_default_output_is_the_data_table_only(tmp_path, capsys, monkeypatch):
 
         await ah_scraper.show_schema(all_tables=True)
         names = [t["name"] for t in json.loads(capsys.readouterr().out)["tables"]]
-        assert set(names) == {"auction_wins", "ah_state", "ah_runs"}
+        # auction_bonuses is a DERIVED index over auction_wins.bonuses, not a data table — it is
+        # bookkeeping in the same sense as ah_state, so it belongs behind --all-tables too.
+        assert set(names) == {"auction_wins", "auction_bonuses", "ah_state", "ah_runs"}
 
     _run(scenario, tmp_path, "s2.db")
 
