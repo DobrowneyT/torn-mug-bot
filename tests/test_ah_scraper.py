@@ -267,7 +267,77 @@ def test_backfill_resumes_below_where_it_stopped(tmp_path, monkeypatch):
 
         api.calls.clear()
         second = await ah_scraper.scrape_backfill(None, limit=100, max_pages=40)
-        assert api.calls[0]["to"] == floor - 1, "resumed from the wrong point"
+        # inclusive, matching Torn's `prev`: the boundary row is re-requested, not stepped over
+        assert api.calls[0]["to"] == floor, "resumed from the wrong point"
+        assert second["complete"] is True and await ah_db.count_auctions() == 250
+
+    _run(scenario, tmp_path)
+
+
+def test_backfill_does_not_skip_auctions_sharing_the_boundary_second(tmp_path, monkeypatch):
+    """The bug the live payload exposed. Torn's own `prev` link bounds on the oldest timestamp ON
+    the page, inclusively — so a page boundary falling in the middle of a second is normal. Stepping
+    to oldest-1 would drop the rest of that second, permanently and with nothing to show for it."""
+    # three auctions settle in the same second, and a page boundary cuts through them
+    rows = [_api_row(1, 3000, uid=1), _api_row(2, 2000, uid=2),
+            _api_row(3, 2000, uid=3), _api_row(4, 2000, uid=4),
+            _api_row(5, 1000, uid=5)]
+    api = _FakeApi(rows)
+    api.install(monkeypatch)
+    _no_sleep(monkeypatch)
+
+    async def scenario():
+        result = await ah_scraper.scrape_backfill(None, limit=3, max_pages=40)
+        stored = await ah_db.count_auctions()
+        assert stored == 5, f"lost {5 - stored} auction(s) at the page boundary"
+        assert result["complete"] is True
+        assert api.calls[1]["to"] == 2000, "boundary must be re-requested, not stepped over"
+
+    _run(scenario, tmp_path)
+
+
+def test_backfill_steps_below_a_second_it_cannot_page_off(tmp_path, monkeypatch):
+    """The cost of an inclusive bound: a FULL page entirely within one second cannot advance.
+    Losing that second beats abandoning the rest of history — but it must not stall."""
+    rows = [_api_row(i + 1, 2000, uid=i) for i in range(3)] + [_api_row(9, 1000, uid=9)]
+    api = _FakeApi(rows)
+    api.install(monkeypatch)
+    _no_sleep(monkeypatch)
+
+    async def scenario():
+        result = await ah_scraper.scrape_backfill(None, limit=3, max_pages=40)
+        assert result["complete"] is True, "walk stalled on a single-second page"
+        assert await ah_db.count_auctions() == 4, "the older auction was never reached"
+
+    _run(scenario, tmp_path)
+
+
+def test_backfill_stops_on_the_time_budget_and_resumes(tmp_path, monkeypatch):
+    """A full-history download is of unknown length, so it is bounded by wall clock rather than a
+    page count — capping pages would mean guessing the number we are trying to measure."""
+    api = _FakeApi([_api_row(i + 1, 1_700_000_000 + i * 60, uid=i) for i in range(250)])
+    api.install(monkeypatch)
+    _no_sleep(monkeypatch)
+
+    clock = [0.0]
+    monkeypatch.setattr(ah_scraper.time, "monotonic", lambda: clock[0])
+
+    async def scenario():
+        real_store = ah_scraper._store
+
+        async def slow_store(raw):                 # each page "takes" 10s
+            clock[0] += 10
+            return await real_store(raw)
+
+        monkeypatch.setattr(ah_scraper, "_store", slow_store)
+
+        first = await ah_scraper.scrape_backfill(None, limit=100, max_seconds=15)
+        assert first["complete"] is False and first["pages"] == 2
+        # 199, not 200: page 2 re-requests the boundary row, which is a no-op insert
+        assert await ah_db.count_auctions() == 199
+
+        clock[0] = 0.0
+        second = await ah_scraper.scrape_backfill(None, limit=100, max_seconds=0)   # unbounded
         assert second["complete"] is True and await ah_db.count_auctions() == 250
 
     _run(scenario, tmp_path)

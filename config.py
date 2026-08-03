@@ -86,10 +86,14 @@ AH_DB_PATH = os.environ.get("MUG_AH_DB_PATH") or "/var/lib/mug-bot/mug_ah.db"
 AH_DB_PATH_FALLBACK = os.path.join(os.path.dirname(__file__), "mug_ah.db")
 # Rows per request. Torn caps this at 100; asking for fewer just costs more calls for the same data.
 AH_PAGE_LIMIT = int(os.environ.get("MUG_AH_PAGE_LIMIT", "100"))
-# Hard cap on requests per run, so one cron invocation can neither run for an hour nor eat the key
-# budget the poller needs. Both scrape modes are resumable, so hitting the cap is not a failure —
-# the next run picks up exactly where this one stopped.
+# Hard cap on requests for a FORWARD run. Catching up on new auctions should never be large, so a
+# run that wants more pages than this is a signal something is wrong, not a reason to keep going.
 AH_MAX_PAGES_PER_RUN = int(os.environ.get("MUG_AH_MAX_PAGES", "40"))
+# BACKFILL is bounded by wall clock instead. Its whole purpose is a download of unknown length, so a
+# page cap would mean guessing the number we are trying to measure. It is resumable, so stopping on
+# the budget is not a failure — the next run continues from where this one reached. 0 = unbounded,
+# which is what you want for a one-off "download everything" run.
+AH_MAX_SECONDS_PER_RUN = float(os.environ.get("MUG_AH_MAX_SECONDS", "1800"))   # 30m
 # The forward scrape re-requests this many seconds either side of its watermark. Torn documents
 # `from` as "after this time" without saying whether that is inclusive, and several auctions can
 # share one end timestamp — so a strictly-advancing cursor could step over rows at the boundary.
