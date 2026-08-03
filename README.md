@@ -275,10 +275,17 @@ Install the cron line alongside the deploy one:
 
 ```bash
 ( crontab -l 2>/dev/null; \
-  echo '*/10 * * * * cd /home/ubuntu/torn/torn-mug-bot && ./.venv/bin/python ah_scrape.py forward >> /var/log/mug-bot-ah.log 2>&1' \
+  echo '15,45 * * * * cd /home/ubuntu/torn/torn-mug-bot && ./.venv/bin/python ah_scrape.py forward >> /var/log/mug-bot-ah.log 2>&1' \
 ) | crontab -
 sudo touch /var/log/mug-bot-ah.log && sudo chown "$USER":"$USER" /var/log/mug-bot-ah.log
 ```
+
+Every 30 minutes, offset off the hour so it never lands on the same tick as the deploy cron. At the
+observed rate (~360 auctions/day) a run has about 7 auctions to collect, so it is a single request.
+
+**`forward` runs the match step automatically.** New auctions are worth nothing until they have been
+resolved against the un-attributed uids, so the scrape and the match are one operation rather than
+two cron lines that can drift apart. `--no-match` skips it; `match` runs it alone.
 
 ### Downloading the whole history
 
@@ -348,6 +355,33 @@ which is a no-op insert.
 
 Unlike `forward`, it is bounded by wall clock rather than page count — the length of a history
 download is precisely the number we are trying to measure, so capping pages would mean guessing it.
+
+### Resolving anonymous listings (`match`)
+
+Cross-references every un-attributed uid — anonymous, or on the market with no captured seller —
+against the ledger, and writes the resolved owner into the **main** database:
+
+```bash
+./.venv/bin/python ah_scrape.py match
+```
+
+Precomputed rather than looked up live, because `reconcile_gear` runs per item per poll on the same
+connection the alert path queues on. Resolving each uid live would put a cross-database read on the
+hot path for no benefit, since AH data only changes when the scrape runs.
+
+Each row carries a `confidence` — the **measured** probability that the AH buyer is still the
+seller, given how old the evidence is, taken from `calibrate` rather than chosen. It also carries
+the evidence age and the auction price, so an alert can show its own provenance.
+
+Two rules the match step enforces, both of which are correctness rather than polish:
+
+- **direct evidence beats inferred.** A uid the item-matcher has since captured a real seller for
+  has its inferred row *deleted*. Keeping it would go on blaming an old auction winner for a listing
+  whose seller we now know.
+- **sentinel uids are excluded.** Torn's ledger contains one uid on 49,435 auctions — 9% of every
+  row on record. It identifies no item, and matching on it would hand a large slice of the market to
+  whoever last "won" it. Anything above `MUG_AH_MAX_UID_REUSE` is skipped, and excluded from the
+  turnover statistics it would otherwise dominate.
 
 ### How far can an AH win be trusted? (`calibrate`)
 

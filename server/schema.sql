@@ -199,3 +199,29 @@ CREATE TABLE IF NOT EXISTS alerted_deals (
     alerted_at INTEGER NOT NULL,
     PRIMARY KEY (item_id, price)
 );
+
+-- AH-inferred owners for uids we cannot otherwise attribute (anonymous listings, and gear the
+-- item-matcher has not captured yet). Written by the ah_scrape.py `match` cron step, read by the
+-- poller.
+--
+-- PRECOMPUTED ON PURPOSE. The ledger is a separate database file, and reconcile_gear runs per item
+-- per poll on the connection the alert path also queues on — so resolving each uid live would put a
+-- cross-database read on the hot path. The match step does it out of process, on a cron, and leaves
+-- an indexed local lookup behind.
+--
+-- INFERRED, NOT OBSERVED. `confidence` is the empirically measured probability that the AH buyer is
+-- still the seller, given how old the evidence is (see `ah_scrape.py calibrate`). Direct evidence
+-- always beats this: a uid the item-matcher captures a seller for must have its row dropped.
+CREATE TABLE IF NOT EXISTS anon_matches (
+    uid         TEXT PRIMARY KEY,
+    buyer_id    INTEGER NOT NULL,
+    buyer_name  TEXT,
+    auction_id  INTEGER,
+    price       INTEGER,          -- what they paid at auction; shown as alert provenance
+    won_at      INTEGER NOT NULL,
+    age_days    INTEGER,          -- evidence age when matched, so the alert can show it
+    confidence  REAL,             -- measured P(correct) for that age; NOT a guess
+    matched_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_anon_matches_buyer ON anon_matches(buyer_id);
+CREATE INDEX IF NOT EXISTS idx_anon_matches_conf  ON anon_matches(confidence);

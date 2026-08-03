@@ -11,6 +11,8 @@ Runs as a cron process, not inside the bot. Two modes:
   calibrate report how often AH-inferred ownership would have been CORRECT, by evidence age,
             measured against sellers we directly observed. This is what #12's confidence bands
             should be derived from. Reads both databases; makes no API calls.
+  match     resolve every un-attributed uid against the ledger and write the result into the MAIN
+            database, with a measured confidence. Runs automatically after `forward`.
 
 Both are resumable: forward is capped by page count (catching up should never be large), backfill
 by wall clock (its length is exactly what we are trying to measure). An interrupted run loses
@@ -384,6 +386,63 @@ async def show_status() -> None:
             print(f"  {year}  {count:>8,}  {bar}{flag}")
 
 
+def confidence_for_age(age_days: float) -> float:
+    """Measured P(the AH buyer is still the seller) for evidence this old.
+
+    A lookup into config.AH_CONFIDENCE_BANDS, which comes from `calibrate` against directly-observed
+    sellers — not from judgement. Kept as a step function rather than interpolated: the underlying
+    numbers are bucket accuracies with real sample sizes, and smoothing between them would invent
+    precision the measurement does not have.
+    """
+    for max_age, accuracy in config.AH_CONFIDENCE_BANDS:
+        if max_age is None or age_days <= max_age:
+            return accuracy
+    return config.AH_CONFIDENCE_BANDS[-1][1]
+
+
+async def run_match() -> Dict:
+    """Resolve every un-attributed uid we can against the ledger, into the main database.
+
+    Runs after each `forward` scrape. Precomputed rather than looked up live because reconcile_gear
+    runs per item per poll on the connection the alert path queues on — a cross-database read there
+    would put the ledger on the hot path for no benefit, since AH data only changes when this runs.
+
+    Recomputed wholesale each time rather than incrementally. The candidate set is small (thousands),
+    the ledger only moves when the scrape does, and a full recompute means the invalidation rule can
+    never drift: a uid that has since been attributed directly simply is not in the input, so its
+    inferred row is dropped.
+    """
+    from server import db
+
+    anon = await db.get_anon_uid_set()
+    cur = await db._db.execute("SELECT uid FROM unmatched_gear")
+    unmatched = {r[0] for r in await cur.fetchall()}
+    candidates = set(anon) | unmatched
+
+    if not candidates:
+        result = await db.replace_anon_matches([], candidates)
+        log.info("ah match: no un-attributed uids")
+        return {"candidates": 0, **result}
+
+    wins = await ah_db.wins_for_uids(candidates)
+    now = int(time.time())
+    rows = []
+    for uid, win in wins.items():
+        age_days = max(0, (now - win["ended_at"]) // 86400)
+        rows.append({
+            "uid": uid, "buyer_id": win["buyer_id"], "buyer_name": win["buyer_name"],
+            "auction_id": win["auction_id"], "price": win["price"], "won_at": win["ended_at"],
+            "age_days": age_days, "confidence": confidence_for_age(age_days),
+        })
+
+    result = await db.replace_anon_matches(rows, candidates)
+    high = sum(1 for r in rows if r["confidence"] >= config.AH_CONFIDENCE_BANDS[1][1])
+    log.info("ah match: %d of %d un-attributed uid(s) resolved (%d high-confidence), %d dropped",
+             len(rows), len(candidates), high, result["dropped"])
+    return {"candidates": len(candidates), "resolved": len(rows), "high_confidence": high,
+            **result}
+
+
 async def show_coverage() -> None:
     """How much of the anonymous backlog the ledger can actually de-anonymise.
 
@@ -521,8 +580,11 @@ async def cli(argv=None) -> int:
 
     p = argparse.ArgumentParser(prog="ah_scrape", description="Torn auction house scraper")
     p.add_argument("mode",
-                   choices=["forward", "backfill", "probe", "status", "coverage", "calibrate"],
+                   choices=["forward", "backfill", "probe", "status", "coverage", "calibrate",
+                            "match"],
                    nargs="?", default="forward")
+    p.add_argument("--no-match", action="store_true",
+                   help="forward: skip the match step that normally follows the scrape")
     p.add_argument("--limit", type=int, default=None, help="rows per request (max 100)")
     p.add_argument("--max-pages", type=int, default=None, help="cap requests for this run")
     p.add_argument("--restart", action="store_true",
@@ -539,11 +601,17 @@ async def cli(argv=None) -> int:
             await show_status()
             return 0
 
-        if args.mode in ("coverage", "calibrate"):
-            # Need the main database too, but only to read — no keys, no API calls.
+        if args.mode in ("coverage", "calibrate", "match"):
+            # Need the main database too. coverage/calibrate only read it; match writes the
+            # resolved rows. No keys, no API calls either way.
             await db.init_db()
             try:
-                await (show_coverage() if args.mode == "coverage" else show_calibration())
+                if args.mode == "coverage":
+                    await show_coverage()
+                elif args.mode == "calibrate":
+                    await show_calibration()
+                else:
+                    print(json.dumps(await run_match()))
             finally:
                 await db.close_db()
             return 0
@@ -563,6 +631,15 @@ async def cli(argv=None) -> int:
                 return 0
             result = await run(args.mode, limit=args.limit, max_pages=args.max_pages,
                                max_seconds=args.max_seconds, restart=args.restart)
+            # New auctions are only useful once they have been resolved against the un-attributed
+            # uids, so the scrape and the match are one operation by default rather than two cron
+            # lines that can drift apart.
+            if args.mode == "forward" and not args.no_match:
+                await db.init_db()
+                try:
+                    result["match"] = await run_match()
+                finally:
+                    await db.close_db()
             print(json.dumps(result))
         finally:
             await db.close_db()
