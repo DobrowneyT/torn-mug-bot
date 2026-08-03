@@ -392,18 +392,24 @@ async def show_status() -> None:
             print(f"  {year}  {count:>8,}  {bar}{flag}")
 
 
-def confidence_for_age(age_days: float) -> float:
-    """Measured P(the AH buyer is still the seller) for evidence this old.
+def confidence_for_age(age_days: float, source: str = "buyer") -> Optional[float]:
+    """Measured P(the inferred owner is still the seller) for evidence this old.
 
-    A lookup into config.AH_CONFIDENCE_BANDS, which comes from `calibrate` against directly-observed
-    sellers — not from judgement. Kept as a step function rather than interpolated: the underlying
-    numbers are bucket accuracies with real sample sizes, and smoothing between them would invent
-    precision the measurement does not have.
+    A lookup into the band table for that SOURCE, which comes from `calibrate` against
+    directly-observed sellers — not from judgement. A step function rather than interpolated: the
+    underlying numbers are bucket accuracies with real sample sizes, and smoothing between them
+    would invent precision the measurement does not have.
+
+    Returns None when the source has no band table, i.e. it has not been measured. Callers must
+    treat that as "do not use", never as "assume the buyer numbers apply".
     """
-    for max_age, accuracy in config.AH_CONFIDENCE_BANDS:
+    bands = config.AH_CONFIDENCE_BANDS if source == "buyer" else config.AH_SELLER_CONFIDENCE_BANDS
+    if not bands:
+        return None
+    for max_age, accuracy in bands:
         if max_age is None or age_days <= max_age:
             return accuracy
-    return config.AH_CONFIDENCE_BANDS[-1][1]
+    return bands[-1][1]
 
 
 async def run_match() -> Dict:
@@ -430,23 +436,40 @@ async def run_match() -> Dict:
         log.info("ah match: no un-attributed uids")
         return {"candidates": 0, **result}
 
-    wins = await ah_db.wins_for_uids(candidates)
+    # Unsold auctions are only considered once seller-side inference has been calibrated. While
+    # AH_SELLER_CONFIDENCE_BANDS is None they are excluded from the lookup entirely, so an unsold
+    # row cannot become the "newest" observation and mask a real sale beneath it.
+    use_seller = bool(config.AH_SELLER_CONFIDENCE_BANDS)
+    wins = await ah_db.wins_for_uids(candidates, include_unsold=use_seller)
     now = int(time.time())
-    rows = []
+    rows, skipped = [], 0
     for uid, win in wins.items():
+        owner = ah_db.inferred_owner(win)
+        if owner is None:
+            skipped += 1
+            continue
+        owner_id, source = owner
         age_days = max(0, (now - win["ended_at"]) // 86400)
+        confidence = confidence_for_age(age_days, source)
+        if confidence is None:                  # unmeasured source — not usable, by design
+            skipped += 1
+            continue
         rows.append({
-            "uid": uid, "buyer_id": win["buyer_id"], "buyer_name": win["buyer_name"],
+            "uid": uid, "buyer_id": owner_id,
+            "buyer_name": win["buyer_name"] if source == "buyer" else win["seller_name"],
             "auction_id": win["auction_id"], "price": win["price"], "won_at": win["ended_at"],
-            "age_days": age_days, "confidence": confidence_for_age(age_days),
+            "age_days": age_days, "confidence": confidence, "source": source,
         })
 
     result = await db.replace_anon_matches(rows, candidates)
     high = sum(1 for r in rows if r["confidence"] >= config.AH_CONFIDENCE_BANDS[1][1])
-    log.info("ah match: %d of %d un-attributed uid(s) resolved (%d high-confidence), %d dropped",
-             len(rows), len(candidates), high, result["dropped"])
+    by_source = {}
+    for r in rows:
+        by_source[r["source"]] = by_source.get(r["source"], 0) + 1
+    log.info("ah match: %d of %d un-attributed uid(s) resolved (%d high-confidence, by source %s), "
+             "%d dropped", len(rows), len(candidates), high, by_source or "-", result["dropped"])
     return {"candidates": len(candidates), "resolved": len(rows), "high_confidence": high,
-            **result}
+            "by_source": by_source, **result}
 
 
 async def show_coverage() -> None:
@@ -509,18 +532,23 @@ def _bucket_label(lo, hi) -> str:
 
 
 async def show_calibration() -> None:
-    """How often AH-inferred ownership would have been RIGHT, by how old the evidence was.
+    """How often AH-inferred ownership would have been RIGHT, by evidence age AND by source.
 
-    The auction house is a lossy observer: a uid also changes hands by trade, bazaar and item market,
-    none of which it sees. So "most recent AH win" is not "current owner" — it is a decaying
-    estimate, and the decay rate is the thing #12's confidence model has to be built on.
+    The auction house is a lossy observer: a uid also changes hands by trade, bazaar and item
+    market, none of which it sees. So an AH row is a decaying estimate of current ownership, and the
+    decay rate is what any confidence model has to be built on.
 
-    This measures it directly and retroactively. For every uid we have DIRECTLY observed a seller
-    for, we ask what the auction house would have claimed at that moment, and whether it matched.
-    No feedback loop, no waiting, no new collection — the answer is already in the data.
+    TWO SOURCES, MEASURED SEPARATELY:
+      buyer   a completed sale — the buyer held it
+      seller  an auction that ENDED UNSOLD — the seller kept it
 
-    Read the accuracy column as: "if an anon-match alert had fired on evidence this old, this is the
-    fraction of the time it would have named the right player."
+    Equally strong at the moment they happen, but differently selected afterwards. Someone whose
+    auction failed is much more likely than a random owner to relist, including anonymously, which
+    is exactly the population being resolved — so the seller curve could plausibly be BETTER. It
+    could also be worse, if a failed auction mostly means the item went somewhere we cannot see.
+    Sharing one set of bands between them would hide whichever it is.
+
+    Measured retroactively against sellers we directly observed. No feedback loop, no waiting.
     """
     from server import db
 
@@ -531,48 +559,63 @@ async def show_calibration() -> None:
         return
 
     wins = await ah_db.all_wins_for_uids({o["uid"] for o in observations})
-    buckets = {b: [0, 0] for b in _AGE_BUCKETS}          # bucket -> [checked, agreed]
+    buckets = {src: {b: [0, 0] for b in _AGE_BUCKETS} for src in ("buyer", "seller")}
     unknown = 0
 
     for obs in observations:
         history = wins.get(obs["uid"])
-        if not history:
-            unknown += 1
+        win = ah_db.win_as_of(history, obs["observed_at"]) if history else None
+        owner = ah_db.inferred_owner(win)
+        if owner is None:
+            unknown += 1                                  # no prior row, or nothing inferable
             continue
-        win = ah_db.win_as_of(history, obs["observed_at"])
-        if win is None:
-            unknown += 1                                  # only auctioned AFTER we saw it
-            continue
+        owner_id, source = owner
         age_days = (obs["observed_at"] - win["ended_at"]) / 86400
         for bucket in _AGE_BUCKETS:
             lo, hi = bucket
             if age_days >= lo and (hi is None or age_days < hi):
-                buckets[bucket][0] += 1
-                buckets[bucket][1] += int(win["buyer_id"] == obs["seller_id"])
+                buckets[source][bucket][0] += 1
+                buckets[source][bucket][1] += int(owner_id == obs["seller_id"])
                 break
 
     print("Calibration: would the AH-inferred owner have been the actual seller?")
-    print(f"({len(observations):,} direct observations; {unknown:,} had no prior AH win to test)")
-    print()
-    print(f"  {'evidence age':<14}{'checked':>9}{'agreed':>9}{'accuracy':>11}")
-    total_checked = total_agreed = 0
-    for bucket in _AGE_BUCKETS:
-        checked, agreed = buckets[bucket]
-        total_checked += checked
-        total_agreed += agreed
-        if not checked:
+    print(f"({len(observations):,} direct observations; {unknown:,} had no prior AH row to test)")
+
+    grand_checked = 0
+    for source, label in (("buyer", "BUYER of a completed sale"),
+                          ("seller", "SELLER of an auction that ended UNSOLD")):
+        checked_total = sum(c for c, _ in buckets[source].values())
+        print()
+        print(f"  {label}")
+        if not checked_total:
+            if source == "seller":
+                print("    no data — the ledger holds no unsold auctions. They were dropped at")
+                print("    ingest before buyer_id became nullable; `backfill --restart` recovers")
+                print("    them. Until then seller-side inference stays unmeasured, and unused.")
+            else:
+                print("    no data")
             continue
-        print(f"  {_bucket_label(*bucket):<14}{checked:>9,}{agreed:>9,}"
-              f"{100.0 * agreed / checked:>10.1f}%")
-    if total_checked:
-        print(f"  {'overall':<14}{total_checked:>9,}{total_agreed:>9,}"
-              f"{100.0 * total_agreed / total_checked:>10.1f}%")
+        grand_checked += checked_total
+        print(f"    {'evidence age':<14}{'checked':>9}{'agreed':>9}{'accuracy':>11}")
+        agreed_total = 0
+        for bucket in _AGE_BUCKETS:
+            checked, agreed = buckets[source][bucket]
+            agreed_total += agreed
+            if not checked:
+                continue
+            print(f"    {_bucket_label(*bucket):<14}{checked:>9,}{agreed:>9,}"
+                  f"{100.0 * agreed / checked:>10.1f}%")
+        print(f"    {'overall':<14}{checked_total:>9,}{agreed_total:>9,}"
+              f"{100.0 * agreed_total / checked_total:>10.1f}%")
+        if checked_total < 50:
+            print(f"    NOT ENOUGH DATA — {checked_total} comparisons. A smoke test, not a")
+            print("    calibration; setting a threshold from this would be setting it from noise.")
+
     print()
-    if total_checked < 50:
-        print(f"NOT ENOUGH DATA — {total_checked} comparisons. Treat the above as a smoke test, not")
-        print("a calibration. This grows every time the poller detects a gear sale.")
-        return
-    print("Set the #12 confidence bands from the age at which accuracy stops being worth acting on.")
+    if grand_checked >= 50:
+        print("Set AH_CONFIDENCE_BANDS from the buyer table. Only fill AH_SELLER_CONFIDENCE_BANDS")
+        print("once the seller table has real numbers — leaving it None keeps seller-side")
+        print("inference switched off, which is the correct state while it is unmeasured.")
     print("One caveat on the sample: it only covers uids that reached the ITEM MARKET, because that")
     print("is the only place we observe a seller. A uid won at auction and kept forever never")
     print("appears here — which is the right bias, since we only ever infer for uids we can see")

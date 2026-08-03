@@ -471,6 +471,22 @@ market**, because that is the only place a seller is observable. A uid won at au
 forever never appears. That is the right bias — we only ever infer for uids we can see listed — but
 the numbers describe items that move.
 
+`calibrate` reports **two curves, separately**:
+
+- **buyer** — a completed sale; the buyer held it
+- **seller** — an auction that ended *unsold*; the seller kept it
+
+Equally strong at the moment they happen, but differently selected afterwards. Someone whose auction
+failed is far more likely than a random owner to relist — including anonymously, which is exactly
+the population being resolved — so the seller curve could plausibly be *better*. Or worse, if a
+failed auction mostly means the item went somewhere invisible. Sharing one table between them would
+hide whichever it is.
+
+Seller-side inference is **off until it is measured**: `AH_SELLER_CONFIDENCE_BANDS` is `None`, and
+`None` means unsold rows are excluded from matching entirely. Filling it in from a real `calibrate`
+run is what turns the source on. Falling back to the buyer numbers would apply a curve measured on
+a different population, which is how a confidence figure stops meaning anything.
+
 ### Is the ledger worth anything? (`coverage`)
 
 ```

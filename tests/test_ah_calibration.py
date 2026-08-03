@@ -220,7 +220,7 @@ def test_calibration_ignores_observations_with_no_prior_win(tmp_path, monkeypatc
                                  qty_sold=1, unit_price=1, sold_at=now - 10 * DAY)
             await ah_scraper.show_calibration()
             out = capsys.readouterr().out
-            assert "1 had no prior AH win to test" in out
+            assert "1 had no prior AH row to test" in out
             assert "overall" not in out, "an untestable observation must not reach the table"
         finally:
             await db.close_db()
@@ -238,6 +238,145 @@ def test_calibration_says_so_when_there_is_nothing_to_measure(tmp_path, monkeypa
         try:
             await ah_scraper.show_calibration()
             assert "nothing to calibrate against" in capsys.readouterr().out
+        finally:
+            await db.close_db()
+            await ah_db.close_db()
+
+    asyncio.run(scenario())
+
+
+# --------------------------------- seller-side inference --------------------------------
+
+def test_inferred_owner_reads_the_right_column():
+    """A completed sale says the BUYER holds it; an auction that ended unsold says the SELLER kept
+    it. Both are ownership observations — from different columns, and from different populations."""
+    from server import ah_db as _ah
+    assert _ah.inferred_owner(_win(1, "u", 500, 1000)) == (500, "buyer")
+    unsold = dict(_win(2, "u", None, 1000), seller_id=77, buyer_name=None)
+    assert _ah.inferred_owner(unsold) == (77, "seller")
+    assert _ah.inferred_owner(dict(unsold, seller_id=None)) is None
+    assert _ah.inferred_owner(None) is None
+
+
+def test_seller_side_is_unusable_until_it_is_measured(monkeypatch):
+    """None bands mean UNMEASURED, and unmeasured must mean UNUSED. Falling back to the buyer
+    numbers would silently apply a curve measured on a different population."""
+    from server import ah_scraper as _s
+    assert config.AH_SELLER_CONFIDENCE_BANDS is None
+    assert _s.confidence_for_age(2, "seller") is None
+    assert _s.confidence_for_age(2, "buyer") == 0.880      # 2 days -> the 1-7d band
+
+    monkeypatch.setattr(config, "AH_SELLER_CONFIDENCE_BANDS", ((7, 0.7), (None, 0.4)))
+    assert _s.confidence_for_age(2, "seller") == 0.7
+    assert _s.confidence_for_age(400, "seller") == 0.4
+
+
+def test_calibration_reports_the_two_sources_separately(tmp_path, monkeypatch, capsys):
+    """Sharing one table between them would hide whichever source is the weaker."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "s1.db"))
+
+    async def scenario():
+        await ah_db.init_db(str(tmp_path / "s1ah.db"))
+        await db.init_db()
+        try:
+            now = int(time.time())
+            # a sold auction whose buyer did go on to list it
+            await ah_db.record_auctions([_win(1, "sold", 100, now - 2 * DAY)])
+            await db.record_sale(listing_id="uid:sold", item_id=399, item_name="M", seller_id=100,
+                                 qty_sold=1, unit_price=1, sold_at=now - DAY)
+            # an unsold auction whose seller did go on to list it
+            unsold = dict(_win(2, "kept", None, now - 2 * DAY), seller_id=200, buyer_name=None)
+            await ah_db.record_auctions([unsold])
+            await db.record_sale(listing_id="uid:kept", item_id=399, item_name="M", seller_id=200,
+                                 qty_sold=1, unit_price=1, sold_at=now - DAY)
+
+            await ah_scraper.show_calibration()
+            out = capsys.readouterr().out
+            assert "BUYER of a completed sale" in out
+            assert "SELLER of an auction that ended UNSOLD" in out
+            # each source got exactly one comparison, and both agreed
+            assert out.count("100.0%") >= 2, out
+
+        finally:
+            await db.close_db()
+            await ah_db.close_db()
+
+    asyncio.run(scenario())
+
+
+def test_calibration_explains_an_empty_seller_table(tmp_path, monkeypatch, capsys):
+    """Today's live state. "no data" alone would read as a bug rather than as a known consequence
+    of the backfill predating nullable buyer_id."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "s2.db"))
+
+    async def scenario():
+        await ah_db.init_db(str(tmp_path / "s2ah.db"))
+        await db.init_db()
+        try:
+            now = int(time.time())
+            await ah_db.record_auctions([_win(1, "sold", 100, now - 2 * DAY)])
+            await db.record_sale(listing_id="uid:sold", item_id=399, item_name="M", seller_id=100,
+                                 qty_sold=1, unit_price=1, sold_at=now - DAY)
+            await ah_scraper.show_calibration()
+            out = capsys.readouterr().out
+            assert "backfill --restart" in out, "must say how to recover the missing data"
+            assert "unmeasured, and unused" in out
+        finally:
+            await db.close_db()
+            await ah_db.close_db()
+
+    asyncio.run(scenario())
+
+
+def test_match_excludes_unsold_rows_while_seller_side_is_unmeasured(tmp_path, monkeypatch):
+    """The correctness risk of keeping unsold auctions: an unsold row is often the NEWEST for a uid,
+    so if it reached the lookup it would mask the real sale beneath it and resolve to nothing."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "s3.db"))
+
+    async def scenario():
+        await ah_db.init_db(str(tmp_path / "s3ah.db"))
+        await db.init_db()
+        try:
+            now = int(time.time())
+            await db.mark_anon_uid(uid="u", item_name="M", stat=1.0, accuracy=1.0, price=1)
+            await ah_db.record_auctions([
+                _win(1, "u", 500, now - 30 * DAY),                                   # real sale
+                dict(_win(2, "u", None, now - DAY), seller_id=999, buyer_name=None),  # newer, unsold
+            ])
+            result = await ah_scraper.run_match()
+            assert result["resolved"] == 1
+            m = await db.get_anon_match("u")
+            assert m["buyer_id"] == 500, "an unsold auction masked the real sale"
+            assert m["age_days"] == 30
+
+        finally:
+            await db.close_db()
+            await ah_db.close_db()
+
+    asyncio.run(scenario())
+
+
+def test_match_uses_the_seller_once_bands_exist(tmp_path, monkeypatch):
+    """And the switch works: filling in the measured bands is what turns the source on."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "s4.db"))
+    monkeypatch.setattr(config, "AH_SELLER_CONFIDENCE_BANDS", ((7, 0.75), (None, 0.4)))
+
+    async def scenario():
+        await ah_db.init_db(str(tmp_path / "s4ah.db"))
+        await db.init_db()
+        try:
+            now = int(time.time())
+            await db.mark_anon_uid(uid="u", item_name="M", stat=1.0, accuracy=1.0, price=1)
+            await ah_db.record_auctions([
+                _win(1, "u", 500, now - 30 * DAY),
+                dict(_win(2, "u", None, now - DAY), seller_id=999, seller_name="Keeper",
+                     buyer_name=None),
+            ])
+            result = await ah_scraper.run_match()
+            m = await db.get_anon_match("u")
+            assert m["buyer_id"] == 999 and m["buyer_name"] == "Keeper"
+            assert m["confidence"] == 0.75, "seller-side must use its OWN bands"
+            assert result["by_source"] == {"seller": 1}
         finally:
             await db.close_db()
             await ah_db.close_db()
