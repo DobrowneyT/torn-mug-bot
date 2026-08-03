@@ -177,6 +177,57 @@ async def owner_of_uid(uid: Any) -> Optional[Dict]:
 
 # --------------------------------- scraper bookkeeping --------------------------------
 
+async def wins_for_uids(uids) -> Dict[str, Dict]:
+    """Most recent win per uid, for a set of uids. The bulk form of owner_of_uid.
+
+    Chunked because SQLite caps host parameters (999 by default) and the caller's set is the whole
+    anon backlog — thousands of uids. Newest-first with a dict that keeps the first hit per uid, so
+    the "latest observation wins" rule holds without a per-uid query.
+    """
+    out: Dict[str, Dict] = {}
+    keys = [str(u) for u in uids]
+    for i in range(0, len(keys), 500):
+        chunk = keys[i:i + 500]
+        placeholders = ",".join("?" * len(chunk))
+        cur = await _db.execute(
+            f"SELECT * FROM auction_wins WHERE uid IN ({placeholders}) ORDER BY ended_at DESC",
+            chunk,
+        )
+        for row in await cur.fetchall():
+            out.setdefault(row["uid"], dict(row))
+    return out
+
+
+async def uid_turnover() -> Dict[str, int]:
+    """How often a uid is auctioned more than once — the evidence-staleness question.
+
+    #12 trusts "this uid was won at auction and nothing since says otherwise". How safe that is
+    depends on how quickly items change hands, which is measurable here rather than guessable.
+    """
+    cur = await _db.execute(
+        "SELECT n, COUNT(*) FROM (SELECT COUNT(*) AS n FROM auction_wins "
+        "WHERE uid IS NOT NULL GROUP BY uid) GROUP BY n ORDER BY n"
+    )
+    return {f"seen_{r[0]}x": r[1] for r in await cur.fetchall()}
+
+
+async def median_days_between_wins() -> Optional[float]:
+    """Median gap between consecutive auctions of the SAME uid, in days. None if too few repeats."""
+    cur = await _db.execute(
+        "SELECT uid, ended_at FROM auction_wins WHERE uid IS NOT NULL ORDER BY uid, ended_at"
+    )
+    gaps: List[int] = []
+    prev_uid = prev_ts = None
+    for uid, ended_at in await cur.fetchall():
+        if uid == prev_uid:
+            gaps.append(ended_at - prev_ts)
+        prev_uid, prev_ts = uid, ended_at
+    if not gaps:
+        return None
+    gaps.sort()
+    return round(gaps[len(gaps) // 2] / 86400, 1)
+
+
 async def get_state(key: str, default=None):
     val = await _scalar1("SELECT value FROM ah_state WHERE key = ?", key)
     if val is None:

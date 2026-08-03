@@ -6,6 +6,8 @@ Runs as a cron process, not inside the bot. Two modes:
   forward   keep up with newly-completed auctions. This is the cron job.
   backfill  walk backwards through history until Torn stops serving rows. Run manually, or on a
             slow cron until it reports complete.
+  coverage  report how much of the anonymous-uid backlog the ledger can de-anonymise (#12's
+            go/no-go number). Reads both databases; makes no API calls.
 
 Both are resumable: forward is capped by page count (catching up should never be large), backfill
 by wall clock (its length is exactly what we are trying to measure). An interrupted run loses
@@ -323,14 +325,64 @@ async def show_status() -> None:
               f"new={r['rows_new']:<5} {state}")
 
 
+async def show_coverage() -> None:
+    """How much of the anonymous backlog the ledger can actually de-anonymise.
+
+    This is the go/no-go number for #12. That feature is worth building in proportion to how many of
+    the ~1,600 stashed anon uids the AH ledger can put a name to — and that is a measurement, not a
+    guess. Reads both databases and joins nothing permanently; it is a report, not a pipeline.
+    """
+    from server import db
+
+    anon = await db.get_anon_uid_set()
+    cur = await db._db.execute("SELECT uid FROM unmatched_gear")
+    unmatched = {r[0] for r in await cur.fetchall()}
+    cur = await db._db.execute("SELECT uid FROM tracked_gear WHERE seller_id IS NOT NULL")
+    tracked = {r[0] for r in await cur.fetchall()}
+
+    total = await ah_db.count_auctions()
+    print(f"ledger:           {total:,} auctions, back to {_fmt_ts(await ah_db.oldest_ended_at())}")
+    print()
+
+    for label, uids, note in (
+        ("anon uids", anon, "the dead end #12 exists to open up"),
+        ("unmatched gear", unmatched, "on the market, no seller captured yet"),
+        ("tracked gear", tracked, "already attributed — a cross-check, not a target"),
+    ):
+        if not uids:
+            print(f"{label:<16} 0 — nothing to match")
+            continue
+        wins = await ah_db.wins_for_uids(uids)
+        pct = 100.0 * len(wins) / len(uids)
+        print(f"{label:<16} {len(wins):,} of {len(uids):,} resolve ({pct:.1f}%)   {note}")
+        if wins:
+            now = int(time.time())
+            ages = sorted((now - w["ended_at"]) / 86400 for w in wins.values())
+            fresh = sum(1 for a in ages if a <= 7)
+            print(f"{'':<16}   evidence age: median {ages[len(ages) // 2]:.0f}d, "
+                  f"{fresh:,} within a week, oldest {ages[-1]:.0f}d")
+
+    print()
+    turnover = await ah_db.uid_turnover()
+    repeats = sum(v for k, v in turnover.items() if k != "seen_1x")
+    print(f"uid turnover:     {turnover}")
+    print(f"                  {repeats:,} uid(s) auctioned more than once", end="")
+    median = await ah_db.median_days_between_wins()
+    print(f", median {median}d apart" if median is not None else "")
+    print()
+    print("Read the anon line as the ceiling on #12's backlog: an anon uid with no AH win behaves")
+    print("exactly as it does today. The turnover figures set how stale a win can be and still be")
+    print("trusted — a uid that changes hands every few days cannot carry weeks-old evidence.")
+
+
 async def cli(argv=None) -> int:
     """Entry point. Assumes .env is already loaded — see ah_scrape.py at the repo root."""
     from server import db
     from server import keys as keypool
 
     p = argparse.ArgumentParser(prog="ah_scrape", description="Torn auction house scraper")
-    p.add_argument("mode", choices=["forward", "backfill", "probe", "status"], nargs="?",
-                   default="forward")
+    p.add_argument("mode", choices=["forward", "backfill", "probe", "status", "coverage"],
+                   nargs="?", default="forward")
     p.add_argument("--limit", type=int, default=None, help="rows per request (max 100)")
     p.add_argument("--max-pages", type=int, default=None, help="cap requests for this run")
     p.add_argument("--max-seconds", type=float, default=None,
@@ -342,6 +394,15 @@ async def cli(argv=None) -> int:
     try:
         if args.mode == "status":
             await show_status()
+            return 0
+
+        if args.mode == "coverage":
+            # Needs the main database too, but only to read uid sets — no keys, no API calls.
+            await db.init_db()
+            try:
+                await show_coverage()
+            finally:
+                await db.close_db()
             return 0
 
         # API keys are managed through /keys and live in the MAIN database, so the scraper opens it
