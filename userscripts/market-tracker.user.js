@@ -16,7 +16,7 @@
     console.log('[MARKET TRACKER] Market Tracker for Mug Bot running');
 
     // === Mug bot ingest server (standalone box) ===
-    const SERVER_URL = 'http://5.161.91.183:3001';
+    const SERVER_URL = 'http://51.68.212.98:3001';
 
     // === COMPLIANCE: only ever act while THIS page is actively viewed ===
     // Torn's rules permit using/forwarding a page's WebSocket only while it is in the
