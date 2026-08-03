@@ -7,8 +7,9 @@ Runs as a cron process, not inside the bot. Two modes:
   backfill  walk backwards through history until Torn stops serving rows. Run manually, or on a
             slow cron until it reports complete.
 
-Both are resumable and bounded by AH_MAX_PAGES_PER_RUN, so an interrupted run loses nothing and a
-long history is filled across several runs rather than in one enormous one.
+Both are resumable: forward is capped by page count (catching up should never be large), backfill
+by wall clock (its length is exactly what we are trying to measure). An interrupted run loses
+nothing — the next one continues from where it reached.
 
 WHY AN API SCRAPER AND NOT A USERSCRIPT: issue #11 was originally written believing Torn had no
 auction-house API and specced a page scraper bound by the "actively viewed page" compliance rule.
@@ -169,28 +170,40 @@ async def scrape_forward(client: httpx.AsyncClient, *, limit: Optional[int] = No
 # --------------------------------- backfill --------------------------------------------
 
 async def scrape_backfill(client: httpx.AsyncClient, *, limit: Optional[int] = None,
-                          max_pages: Optional[int] = None) -> Dict:
+                          max_pages: Optional[int] = None,
+                          max_seconds: Optional[float] = None) -> Dict:
     """Walk backwards from the oldest auction we hold until Torn stops returning rows.
 
     How far back the API will actually serve is not documented, and Torn has capped these windows
     before. Rather than block the design on a manual probe, this discovers it: the walk simply stops
     when a page comes back empty and records that history is complete. Depth becomes a measured
     property of the data instead of an assumption in the schema.
+
+    Bounded by WALL CLOCK rather than page count, because the whole point of this mode is a download
+    of unknown length — a page cap would mean guessing the very number we are trying to measure.
+    Pass max_pages to cap it anyway (tests do), or max_seconds=0 for a genuinely unbounded run.
     """
     limit = limit or config.AH_PAGE_LIMIT
-    max_pages = max_pages or config.AH_MAX_PAGES_PER_RUN
+    budget = config.AH_MAX_SECONDS_PER_RUN if max_seconds is None else max_seconds
+    started = time.monotonic()
 
     if await ah_db.get_state("backfill_complete", False):
         floor = await ah_db.oldest_ended_at()
-        log.info("ah backfill: already complete (history reaches back to %s)", floor)
+        log.info("ah backfill: already complete (history reaches back to %s)", _fmt_ts(floor))
         return {"mode": "backfill", "pages": 0, "seen": 0, "stored": 0, "new": 0, "complete": True}
 
-    floor = await ah_db.oldest_ended_at()
-    to_ts = (floor - 1) if floor is not None else None
+    to_ts = await ah_db.oldest_ended_at()
     pages = seen = stored = new = 0
     complete = False
+    stopped = "page cap"
 
-    while pages < max_pages:
+    while True:
+        if max_pages is not None and pages >= max_pages:
+            break
+        if budget and (time.monotonic() - started) >= budget:
+            stopped = "time budget"
+            break
+
         raw = await _fetch(client, limit=limit, sort="DESC", to_ts=to_ts)
         if not raw:
             complete = True
@@ -204,23 +217,39 @@ async def scrape_backfill(client: httpx.AsyncClient, *, limit: Optional[int] = N
         oldest = min(_timestamps(raw), default=None)
         if oldest is None:
             break
-        next_to = oldest - 1
-        if to_ts is not None and next_to >= to_ts:
-            log.warning("ah backfill: page did not move below %d — stopping", to_ts)
-            break
-        to_ts = next_to
         if len(raw) < limit:
             complete = True
             break
+
+        # INCLUSIVE, matching Torn's own `prev` link, which sets `to` to the oldest timestamp ON the
+        # page rather than one below it. Several auctions settle in the same second and a page
+        # boundary can fall in the middle of them, so stepping to oldest-1 would skip the rest of
+        # that second — permanently, and with nothing to show for it. Re-requesting the boundary row
+        # costs one no-op insert per page, which is the trade Torn's own pagination makes.
+        next_to = oldest
+        if to_ts is not None and next_to >= to_ts:
+            # A FULL page entirely within one second: an inclusive bound cannot advance off it, so
+            # the walk would sit here. Step below the second instead. That may lose auctions inside
+            # it, but losing one second beats abandoning the rest of history — and at limit=100 it
+            # needs 100 auctions in the same second, which is why this is a fallback, not the rule.
+            log.warning("ah backfill: a full page sits entirely at %s — stepping below it; "
+                        "auctions within that second may be missed", _fmt_ts(oldest))
+            next_to = oldest - 1
+        to_ts = next_to
+
+        if pages % 25 == 0:
+            log.info("ah backfill: %d pages, %d new, now at %s", pages, new, _fmt_ts(to_ts))
         await asyncio.sleep(config.AH_PAGE_DELAY_SECONDS)
 
     if complete:
         await ah_db.set_state("backfill_complete", True)
-        log.info("ah backfill: complete — history reaches back to %s", await ah_db.oldest_ended_at())
+        log.info("ah backfill: COMPLETE — %d page(s), %d new; history reaches back to %s",
+                 pages, new, _fmt_ts(await ah_db.oldest_ended_at()))
     else:
-        log.info("ah backfill: %d page(s), %d new, resuming below %s next run", pages, new, to_ts)
+        log.info("ah backfill: %d page(s), %d new, stopped on %s — resuming at %s next run",
+                 pages, new, stopped, _fmt_ts(to_ts))
     return {"mode": "backfill", "pages": pages, "seen": seen, "stored": stored, "new": new,
-            "complete": complete}
+            "complete": complete, "reached": to_ts}
 
 
 # --------------------------------- probe -----------------------------------------------
@@ -245,7 +274,8 @@ async def probe(client: httpx.AsyncClient, *, limit: int = 3) -> None:
 
 # --------------------------------- orchestration ---------------------------------------
 
-async def run(mode: str, *, limit: Optional[int] = None, max_pages: Optional[int] = None) -> Dict:
+async def run(mode: str, *, limit: Optional[int] = None, max_pages: Optional[int] = None,
+              max_seconds: Optional[float] = None) -> Dict:
     """One scrape run, wrapped in an ah_runs record.
 
     The run log exists because nobody watches a scraper. Alerts stopping is noticed within minutes;
@@ -259,7 +289,8 @@ async def run(mode: str, *, limit: Optional[int] = None, max_pages: Optional[int
             if mode == "forward":
                 result = await scrape_forward(client, limit=limit, max_pages=max_pages)
             elif mode == "backfill":
-                result = await scrape_backfill(client, limit=limit, max_pages=max_pages)
+                result = await scrape_backfill(client, limit=limit, max_pages=max_pages,
+                                               max_seconds=max_seconds)
             else:
                 raise ValueError(f"unknown scrape mode {mode!r}")
     except Exception as exc:
@@ -302,6 +333,9 @@ async def cli(argv=None) -> int:
                    default="forward")
     p.add_argument("--limit", type=int, default=None, help="rows per request (max 100)")
     p.add_argument("--max-pages", type=int, default=None, help="cap requests for this run")
+    p.add_argument("--max-seconds", type=float, default=None,
+                   help="wall-clock budget for a backfill run; 0 = unbounded (default %s)"
+                        % config.AH_MAX_SECONDS_PER_RUN)
     args = p.parse_args(argv)
 
     await ah_db.init_db()
@@ -323,7 +357,8 @@ async def cli(argv=None) -> int:
                 async with httpx.AsyncClient() as client:
                     await probe(client, limit=args.limit or 3)
                 return 0
-            result = await run(args.mode, limit=args.limit, max_pages=args.max_pages)
+            result = await run(args.mode, limit=args.limit, max_pages=args.max_pages,
+                               max_seconds=args.max_seconds)
             print(json.dumps(result))
         finally:
             await db.close_db()

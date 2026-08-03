@@ -278,17 +278,42 @@ Install the cron line alongside the deploy one:
 sudo touch /var/log/mug-bot-ah.log && sudo chown "$USER":"$USER" /var/log/mug-bot-ah.log
 ```
 
-Then fill in history, which is safe to leave on a slow cron until it reports complete:
+### Downloading the whole history
+
+Do this once, on the box, inside `screen`/`tmux` so it survives your ssh session:
 
 ```bash
-./.venv/bin/python ah_scrape.py backfill      # repeat, or */30 in cron; it no-ops once done
+cd /home/ubuntu/torn/torn-mug-bot
+./.venv/bin/python ah_scrape.py backfill --max-seconds 0     # 0 = run until complete
+```
+
+Resumable and idempotent, so it is safe to interrupt and re-run — it continues from the oldest
+auction it reached rather than starting over. It logs its way back through time:
+
+```
+ah backfill: 25 pages, 2500 new, now at 2026-07-14 09:12:41Z
+ah backfill: 50 pages, 5000 new, now at 2026-06-28 22:04:03Z
+ah backfill: COMPLETE — 812 page(s), 81143 new; history reaches back to 2024-03-02 11:55:07Z
+```
+
+If you would rather not babysit it, leave the default 30-minute budget and put it on a slow cron
+until it reports complete — it no-ops from then on:
+
+```bash
+( crontab -l 2>/dev/null; \
+  echo '17 * * * * cd /home/ubuntu/torn/torn-mug-bot && ./.venv/bin/python ah_scrape.py backfill >> /var/log/mug-bot-ah.log 2>&1' \
+) | crontab -
 ```
 
 **How far back Torn will serve is not documented**, and the scraper discovers it rather than
-assuming: `backfill` walks backwards until a page comes back empty, records that history is
-complete, and `status` prints the span it reached. This also means the ledger may not be
-re-derivable later — if Torn's window is narrower than what you backfilled, re-running it will not
-get that data back. Deploys snapshot `mug_ah.db` alongside the main database for that reason.
+assuming: it walks backwards until a page comes back empty, records that history is complete, and
+`status` prints the span it reached. This also means the ledger may not be re-derivable later — if
+Torn's window is narrower than what you backfilled, re-running will not get that data back. Deploys
+snapshot `mug_ah.db` alongside the main database for that reason.
+
+Sizing, from a live sample: roughly 10 auctions settle every 27 minutes — ~500/day, ~180k/year. At
+100 rows per request that is a few thousand requests per year of history, which is minutes of work
+and a rounding error against a 14-key pool.
 
 ### Modes
 
@@ -301,6 +326,15 @@ no-op insert.
 
 On an empty ledger `forward` takes only the newest page and stops, rather than silently walking all
 of history on a routine cron tick. Filling history is `backfill`'s job and is opt-in.
+
+`backfill` walks the other way and bounds its `to` **inclusively** — on the oldest timestamp *on*
+the page, not one below it. That is what Torn's own `prev` link does, and it matters: several
+auctions settle in the same second, a page boundary can fall in the middle of them, and an exclusive
+bound would skip the rest of that second permanently. The cost is one re-requested row per page,
+which is a no-op insert.
+
+Unlike `forward`, it is bounded by wall clock rather than page count — the length of a history
+download is precisely the number we are trying to measure, so capping pages would mean guessing it.
 
 ## Moving to a new server
 
