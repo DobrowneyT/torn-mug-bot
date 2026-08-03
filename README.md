@@ -482,23 +482,20 @@ the population being resolved — so the seller curve could plausibly be *better
 failed auction mostly means the item went somewhere invisible. Sharing one table between them would
 hide whichever it is.
 
-**Open question: are the no-buyer rows unsold, or still running?** The schema cannot tell them
-apart and they mean opposite things — an ended-unsold auction is historical evidence that decays,
-while a *running* one means the seller holds the item right now (the freshest evidence there is, but
-transient, and calling it "unsold" asserts an outcome that has not happened). Settle it with:
+**Answered: the no-buyer rows are neither.** `probe --oldest` showed they are auction ids 1-63 on
+Torn staff accounts — seed data from when the auction house was built in January 2013. The feed
+carries no active auctions at all: nothing has a future timestamp, and the ASC end is 2013 rather
+than today. So it really is a completed-events feed.
 
-```bash
-./.venv/bin/python ah_scrape.py probe --oldest --limit 20
-```
+Genuinely ended-unsold auctions do exist, but are **vanishingly rare** — at most 293 across 553,907
+rows (0.05%). Modern Torn does not appear to publish expired auctions.
 
-Those rows sort at the old end, which is why `--oldest` exists. The probe reads `timestamp` and
-says which reading each row supports — a future date proves it is running, a real past date proves
-it ended.
-
-Seller-side inference is **off until it is measured**: `AH_SELLER_CONFIDENCE_BANDS` is `None`, and
-`None` means unsold rows are excluded from matching entirely. Filling it in from a real `calibrate`
-run is what turns the source on. Falling back to the buyer numbers would apply a curve measured on
-a different population, which is how a confidence figure stops meaning anything.
+Which means seller-side inference stays **off, probably permanently**:
+`AH_SELLER_CONFIDENCE_BANDS` is `None`, and `None` means unsold rows are excluded from matching
+entirely. Not because the idea is wrong — an auction that failed to sell is good evidence the seller
+kept the item — but because there is no sample to calibrate it against. The machinery stays in
+place; if Torn ever starts publishing expired auctions, filling in the bands from a real `calibrate`
+run is all that is needed.
 
 ### Is the ledger worth anything? (`coverage`)
 

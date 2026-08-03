@@ -303,18 +303,23 @@ async def probe(client: httpx.AsyncClient, *, limit: int = 3, oldest: bool = Fal
     """Fetch a few auctions and print them raw, storing NOTHING.
 
     `oldest=True` walks from the OTHER end (sort=ASC), which is where the rows without a buyer live.
-    That is the open question this exists to answer: are they auctions that ENDED UNSOLD, or
-    auctions that are still RUNNING? The two look identical in the schema and mean opposite things.
 
-      ended unsold  a completed event. The seller kept the item — historical ownership evidence,
-                    and it decays like any other.
-      still active  not an event at all. The seller holds it RIGHT NOW, which is the freshest
-                    possible ownership evidence — but it is transient, and calling it "unsold"
-                    would record a sale outcome that has not happened.
+    ANSWERED 2026-08-03, and worth recording because the guess was wrong. The question was whether
+    no-buyer rows are auctions that ENDED UNSOLD or ones still RUNNING. Neither hypothesis needed
+    to be right: the epoch-timestamped rows turned out to be auction ids 1-63 on Torn staff accounts
+    (Chedburn is the game's creator), i.e. SEED DATA from when the auction house was built in
+    January 2013. Not live auctions, and not meaningful history.
 
-    The tell is `timestamp`. An ended auction has a real past date. A running one has no meaningful
-    end time yet, which is what an epoch-adjacent value looks like — and a future date would settle
-    it outright.
+    The feed contains NO active auctions at all — nothing carries a future timestamp, and the ASC
+    end is 2013 rather than today. So it really is a completed-events feed.
+
+    Genuinely ended-unsold auctions DO exist (ids 8/9/10: real 2013 dates, 0 bids, null price, no
+    buyer) but are vanishingly rare — at most 293 across 553,907 rows, 0.05%. Modern Torn evidently
+    does not publish expired auctions. That is why seller-side inference stays unmeasured: not
+    because the idea is wrong, but because there is no data to calibrate it with.
+
+    Kept as a tool because the same question will come up for any new field, and the answer should
+    come from a request rather than from the spec.
     """
     raw = await torn.get_auctionhouse(client, limit=limit, sort="ASC" if oldest else "DESC")
     if raw is None:
@@ -332,8 +337,9 @@ async def probe(client: httpx.AsyncClient, *, limit: int = 3, oldest: bool = Fal
         elif ts > now:
             verdict = f"FUTURE ({(ts - now) // 3600}h away) -> this auction is STILL RUNNING"
         elif ts < config.AH_MIN_TIMESTAMP:
-            verdict = ("epoch-adjacent -> no end time set. Most likely STILL RUNNING; "
-                       "an ended auction would carry a real date")
+            verdict = ("epoch-adjacent -> 2013 SEED DATA, not a real auction. Confirmed live: "
+                       "these are auction ids 1-63 on Torn staff accounts, from when the AH was "
+                       "built. Correctly dropped")
         else:
             verdict = "a real past date -> this auction genuinely ENDED UNSOLD"
         print(f"  auction {row.get('id')}: timestamp={ts} bids={row.get('bids')} "
