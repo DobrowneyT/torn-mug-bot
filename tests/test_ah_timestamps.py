@@ -19,6 +19,7 @@ unusable date. The first full backfill against live Torn ended at
 """
 
 import asyncio
+import time
 
 import config
 from server import ah_db, ah_scraper, torn
@@ -218,3 +219,47 @@ def test_year_histogram_is_empty_for_an_empty_ledger(tmp_path, capsys):
         await ah_scraper.show_status()          # must not raise
 
     _run(scenario, tmp_path)
+
+
+# --------------------------------- active vs ended-unsold -------------------------------
+
+def test_probe_distinguishes_a_running_auction_from_one_that_ended_unsold(capsys, monkeypatch):
+    """A row with no buyer is ambiguous and the two readings mean opposite things:
+
+      ended unsold  a completed event — the seller kept it, historical evidence that decays
+      still active  not an event — the seller holds it RIGHT NOW, the freshest evidence there is,
+                    but transient, and recording it as "unsold" asserts an outcome that has not
+                    happened
+
+    The schema cannot tell them apart, so the probe reads it off `timestamp` and says which.
+    """
+    now = int(time.time())
+    rows = [
+        dict(_api_row(1, now + 7200), buyer=None),          # ends in 2h -> running
+        dict(_api_row(2, 1), buyer=None),                   # no end time -> probably running
+        dict(_api_row(3, now - 30 * 86400), buyer=None),    # real past date -> genuinely unsold
+    ]
+    for r in rows:
+        r["buyer"] = None
+
+    async def fake(client, *, item_id=None, limit=100, sort="DESC", from_ts=None, to_ts=None):
+        assert sort == "ASC", "the no-buyer rows sort at the OLD end; probe must ask for them"
+        return rows
+
+    monkeypatch.setattr(ah_scraper.torn, "get_auctionhouse", fake)
+    asyncio.run(ah_scraper.probe(None, limit=10, oldest=True))
+    out = capsys.readouterr().out
+
+    assert "3 without a buyer" in out
+    assert "STILL RUNNING" in out
+    assert "FUTURE" in out
+    assert "genuinely ENDED UNSOLD" in out
+
+
+def test_probe_says_so_when_a_page_has_no_ambiguous_rows(capsys, monkeypatch):
+    async def fake(client, **kwargs):
+        return [_api_row(1, 1_700_000_000)]
+
+    monkeypatch.setattr(ah_scraper.torn, "get_auctionhouse", fake)
+    asyncio.run(ah_scraper.probe(None, limit=1))
+    assert "try --oldest" in capsys.readouterr().out

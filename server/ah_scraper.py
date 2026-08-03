@@ -299,20 +299,48 @@ async def scrape_backfill(client: httpx.AsyncClient, *, limit: Optional[int] = N
 
 # --------------------------------- probe -----------------------------------------------
 
-async def probe(client: httpx.AsyncClient, *, limit: int = 3) -> None:
+async def probe(client: httpx.AsyncClient, *, limit: int = 3, oldest: bool = False) -> None:
     """Fetch a few auctions and print them raw, storing NOTHING.
 
-    Two things the OpenAPI spec cannot tell us and only a live response can: whether an auction that
-    expired unsold really does carry a buyer, and whether these endpoints return a `cache_timestamp`
-    the way itemmarket does (there is no such field in the schema, which is why the scraper runs on
-    a plain interval instead of cache-timed scheduling).
+    `oldest=True` walks from the OTHER end (sort=ASC), which is where the rows without a buyer live.
+    That is the open question this exists to answer: are they auctions that ENDED UNSOLD, or
+    auctions that are still RUNNING? The two look identical in the schema and mean opposite things.
+
+      ended unsold  a completed event. The seller kept the item — historical ownership evidence,
+                    and it decays like any other.
+      still active  not an event at all. The seller holds it RIGHT NOW, which is the freshest
+                    possible ownership evidence — but it is transient, and calling it "unsold"
+                    would record a sale outcome that has not happened.
+
+    The tell is `timestamp`. An ended auction has a real past date. A running one has no meaningful
+    end time yet, which is what an epoch-adjacent value looks like — and a future date would settle
+    it outright.
     """
-    raw = await torn.get_auctionhouse(client, limit=limit, sort="DESC")
+    raw = await torn.get_auctionhouse(client, limit=limit, sort="ASC" if oldest else "DESC")
     if raw is None:
         print("request failed — see the log")
         return
     print(json.dumps(raw, indent=2))
-    print(f"\n--- {len(raw)} row(s); normalised ---")
+
+    now = int(time.time())
+    no_buyer = [r for r in raw if not (r.get("buyer") or {}).get("id")]
+    print(f"\n--- {len(raw)} row(s), {len(no_buyer)} without a buyer ---")
+    for row in no_buyer:
+        ts = row.get("timestamp")
+        if ts is None:
+            verdict = "no timestamp at all"
+        elif ts > now:
+            verdict = f"FUTURE ({(ts - now) // 3600}h away) -> this auction is STILL RUNNING"
+        elif ts < config.AH_MIN_TIMESTAMP:
+            verdict = ("epoch-adjacent -> no end time set. Most likely STILL RUNNING; "
+                       "an ended auction would carry a real date")
+        else:
+            verdict = "a real past date -> this auction genuinely ENDED UNSOLD"
+        print(f"  auction {row.get('id')}: timestamp={ts} bids={row.get('bids')} "
+              f"price={row.get('price')}  {verdict}")
+    if not no_buyer:
+        print("  (none on this page — try --oldest, which is where they sort)")
+    print("\n--- normalised ---")
     for row in raw:
         print(json.dumps(normalize(row), indent=2))
 
@@ -636,6 +664,9 @@ async def cli(argv=None) -> int:
                    help="forward: skip the match step that normally follows the scrape")
     p.add_argument("--limit", type=int, default=None, help="rows per request (max 100)")
     p.add_argument("--max-pages", type=int, default=None, help="cap requests for this run")
+    p.add_argument("--oldest", action="store_true",
+                   help="probe: fetch from the OLDEST end (sort=ASC), where rows without a "
+                        "buyer live — the ones that are either unsold or still running")
     p.add_argument("--restart", action="store_true",
                    help="backfill: clear the completed flag and re-walk from the newest end. "
                         "Inserts are idempotent, so this costs time and nothing else.")
@@ -676,7 +707,7 @@ async def cli(argv=None) -> int:
                 return 2
             if args.mode == "probe":
                 async with httpx.AsyncClient() as client:
-                    await probe(client, limit=args.limit or 3)
+                    await probe(client, limit=args.limit or 3, oldest=args.oldest)
                 return 0
             result = await run(args.mode, limit=args.limit, max_pages=args.max_pages,
                                max_seconds=args.max_seconds, restart=args.restart)
