@@ -223,6 +223,21 @@ MIN_MUG_VALUE = 5_000_000
 # Rolling window over which a seller's sales accumulate into "value change".
 SALE_WINDOW_SECONDS = 60 * 60 * 6    # 6h
 
+# ---- Cross-path sale dedup (DETECTION_MODE=both only) ----
+# In `both` mode the SAME real sale is seen twice: the WebSocket reports the listing's removal
+# instantly, then one cache cycle later the poller notices the uid has vanished. Nothing joins those
+# two observations — they arrive with different listing_ids ("555001" vs "uid:777...") — so each
+# records its own `sales` row and the seller's window counts the item twice. Measured: a $3M gear
+# sale, already alerted and mug-claimed, leaves another unclaimed $3M sitting in the 6h window. The
+# duplicate ALERT is suppressed by the 10m cooldown, but only until it expires; the phantom value
+# then either fires on its own or inflates the next genuine alert.
+#
+# So a sale is dropped if an equivalent one (same seller, item, unit price and quantity) was
+# recorded by the OTHER detection path within this window. Same-path repeats are never touched —
+# a seller genuinely selling two identical items is normal and must still count twice.
+# 0 disables. Only consulted when both paths are live, so in `api` or `ws` mode it cannot fire.
+SALE_DEDUP_SECONDS = int(os.environ.get("MUG_SALE_DEDUP_SECONDS", "180"))   # ~3 cache cycles
+
 # ---- Mug history decay (avoid re-counting cash that's been banked or already mugged) ----
 # After a mug alert posts we assume the cash was taken (the alert => a mug), so those sales are
 # "claimed" and never counted again — this stops the window from re-counting the same sales across

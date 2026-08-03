@@ -161,6 +161,42 @@ async def _record_and_maybe_alert(listing: Dict, qty: int, bot) -> None:
     )
 
 
+# The poller labels its sales by what vanished ("uid:<uid>" for gear, "item:<id>:<price>" for a
+# stackable quantity drop). The WebSocket path uses Torn's real listingID. That prefix is the only
+# thing distinguishing which detector saw a sale, so it is what cross-path dedup keys off.
+_POLLER_LISTING_PREFIXES = ("uid:", "item:")
+
+
+def _sale_source(listing_id) -> str:
+    return "poll" if str(listing_id or "").startswith(_POLLER_LISTING_PREFIXES) else "ws"
+
+
+async def _duplicate_from_other_path(seller_id, item_id, unit_price, qty, listing_id):
+    """The same real sale, already recorded by the other detector? Returns that row, else None.
+
+    Only ever consulted in `both` mode: with one detector live, every sale has exactly one observer
+    and there is nothing to reconcile. That makes this provably inert in today's production `api`
+    mode rather than something to reason about.
+
+    Deliberately does NOT dedup two sales seen by the SAME path. A seller listing and selling two
+    identical items in a few minutes is ordinary, and swallowing the second would under-report a
+    genuine mug — the failure this guards against is over-counting, and the fix must not create the
+    opposite one.
+    """
+    if not (config.detection_ws_enabled() and config.detection_api_enabled()):
+        return None
+    window = config.SALE_DEDUP_SECONDS
+    if window <= 0:
+        return None
+    mine = _sale_source(listing_id)
+    for row in await db.recent_sales_for(seller_id, item_id, int(time.time()) - window):
+        if _sale_source(row["listing_id"]) == mine:
+            continue
+        if int(row["unit_price"] or 0) == int(unit_price or 0) and int(row["qty_sold"]) == int(qty):
+            return row
+    return None
+
+
 async def on_sale(*, seller_id, item_id, item_name, qty, unit_price, listing_id=None, bot=None, stats=None) -> None:
     """Shared sale handler used by BOTH the WS path and the API poller: record the sale,
     (re)enrich the seller, then alert if the accumulated mug clears threshold."""
@@ -171,6 +207,15 @@ async def on_sale(*, seller_id, item_id, item_name, qty, unit_price, listing_id=
     # rather than shown. Timed from the moment the sale is known; reported when the alert posts.
     t0 = time.monotonic()
     async with _seller_lock(seller_id):
+        # Inside the lock: in `both` mode the two detectors are independent tasks, so checking
+        # outside it would let both pass the check before either wrote its row.
+        dupe = await _duplicate_from_other_path(seller_id, item_id, unit_price, qty, listing_id)
+        if dupe is not None:
+            log.info("SALE ignored: seller=%s item=%s listing=%s already recorded %ss ago by the "
+                     "other detector as %s — same sale, not a second one",
+                     seller_id, item_id, listing_id, int(time.time()) - int(dupe["sold_at"]),
+                     dupe["listing_id"])
+            return
         sale_id = await db.record_sale(
             listing_id=listing_id, item_id=item_id, item_name=item_name,
             seller_id=seller_id, qty_sold=qty, unit_price=unit_price,
