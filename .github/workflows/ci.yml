@@ -50,6 +50,21 @@ jobs:
       - name: ruff
         run: ruff check .
 
+  userscripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # A userscript is never imported by the test suite, so a syntax error in one is invisible
+      # here and only shows up as a script that silently stopped loading on Torn. `node --check`
+      # parses without executing, which is all that is needed to catch that.
+      - name: Parse userscripts
+        run: |
+          for f in userscripts/*.js; do
+            echo "checking $f"
+            node --check "$f"
+          done
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:

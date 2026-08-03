@@ -306,6 +306,28 @@ def test_paging_and_the_hard_result_cap(tmp_path):
     _run(scenario, tmp_path, "i.db")
 
 
+def test_total_capped_says_when_the_count_stopped_counting(tmp_path, monkeypatch):
+    """`total` is capped, so past the cap it is a floor rather than a count. The userscript reads
+    this flag for two things — rendering "5,000+" instead of a figure it was not given, and keeping
+    Next enabled — so a silently missing flag understates the history AND strands the pager on
+    page one of a large result."""
+    async def scenario():
+        monkeypatch.setattr(ah_db, "SEARCH_COUNT_CAP", 5)
+        await ah_db.record_auctions(
+            [_auction(i, ended_at=1_700_000_000 + i) for i in range(1, 21)]
+            + [_auction(99, name="Kitchen Knife")])
+
+        capped = await ah_db.search_auctions({"limit": 2, "item_name": "Sai"})
+        assert capped["total"] == 5 and capped["total_capped"] is True
+
+        # Under the cap the number is exact, and must NOT be flagged — a permanent "+" would be
+        # as wrong as a missing one.
+        under = await ah_db.search_auctions({"limit": 2, "item_name": "Kitchen Knife"})
+        assert under["total"] == 1 and under["total_capped"] is False
+
+    _run(scenario, tmp_path, "cap.db")
+
+
 def test_an_empty_query_is_valid_and_bounded(tmp_path):
     async def scenario():
         await ah_db.record_auctions([_auction(i) for i in range(1, 6)])
