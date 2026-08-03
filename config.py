@@ -77,6 +77,30 @@ RAW_CAPTURE = (os.environ.get("MUG_RAW_CAPTURE", "false") or "").strip().lower()
 # the poller and the alert path, so its bloat is not free.
 RAW_RETENTION_DAYS = int(os.environ.get("MUG_RAW_RETENTION_DAYS", "7"))
 
+# ---- Auction house scraper ----
+# The AH ledger lives in its OWN SQLite file. Everything in the bot process serialises through one
+# aiosqlite connection that the alert path also queues on, so a backfill writing tens of thousands
+# of rows into the same file would contend directly with alerts. The scraper is a separate cron
+# process with its own connection; the two never touch. See server/ah_schema.sql.
+AH_DB_PATH = os.environ.get("MUG_AH_DB_PATH") or "/var/lib/mug-bot/mug_ah.db"
+AH_DB_PATH_FALLBACK = os.path.join(os.path.dirname(__file__), "mug_ah.db")
+# Rows per request. Torn caps this at 100; asking for fewer just costs more calls for the same data.
+AH_PAGE_LIMIT = int(os.environ.get("MUG_AH_PAGE_LIMIT", "100"))
+# Hard cap on requests per run, so one cron invocation can neither run for an hour nor eat the key
+# budget the poller needs. Both scrape modes are resumable, so hitting the cap is not a failure —
+# the next run picks up exactly where this one stopped.
+AH_MAX_PAGES_PER_RUN = int(os.environ.get("MUG_AH_MAX_PAGES", "40"))
+# The forward scrape re-requests this many seconds either side of its watermark. Torn documents
+# `from` as "after this time" without saying whether that is inclusive, and several auctions can
+# share one end timestamp — so a strictly-advancing cursor could step over rows at the boundary.
+# Re-fetching a few seconds is free (completed auctions are immutable, so re-delivery is a no-op
+# insert) and removes the whole question.
+AH_OVERLAP_SECONDS = int(os.environ.get("MUG_AH_OVERLAP_SECONDS", "5"))
+# Pause between pages. The per-key token bucket already prevents overrunning Torn, but a cron job
+# that empties the bucket in a burst leaves the poller starved for the next minute — and the poller
+# is the one on the alert path. Spacing the scrape out costs nothing it cares about.
+AH_PAGE_DELAY_SECONDS = float(os.environ.get("MUG_AH_PAGE_DELAY", "0.5"))
+
 # ---- Logging ----
 # Level for OUR loggers (mug.*). httpx/httpcore are pinned to WARNING regardless: they log the full
 # request URL, and the Torn key is a query parameter, so at INFO they write live credentials into
