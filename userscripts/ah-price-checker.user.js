@@ -48,9 +48,6 @@
         AHDB_URL_KEY: 'ahdb_api_url',
         AHDB_TOKEN_KEY: 'ahdb_api_token',
         BACKEND_KEY: 'ahdb_backend',       // 'ahdb' | 'upstream'
-        // Superseded key names. Read once so an existing install is not silently logged out and
-        // re-prompted for a token it already has.
-        LEGACY_KEYS: { url: 'mug_api_url', token: 'mug_api_token', backend: 'mug_backend' },
         SUPABASE_URL: 'https://btrmmuuoofbonmuwrkzg.supabase.co',
         SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0cm1tdXVvb2Zib25tdXdya3pnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4NTEzMTgsImV4cCI6MjA4NDQyNzMxOH0.E-s0k46BORXLICAvxtEpqoM3Qmh4-TRLaJAwXO6wJTY',
         WEAV3R_API: 'https://weav3r.dev/api/ranked-weapons',
@@ -1213,20 +1210,13 @@
 
     const backend = {
         id() {
-            const id = GM_getValue(CONFIG.BACKEND_KEY, '') || '';
-            if (id) return id;
-            // Migrate a pre-rename install rather than re-prompting: same setting, new key name.
-            const legacy = GM_getValue(CONFIG.LEGACY_KEYS.backend, '') || '';
-            return legacy === 'mug' ? 'ahdb' : legacy;
+            return GM_getValue(CONFIG.BACKEND_KEY, '') || '';
         },
         url() {
-            const url = GM_getValue(CONFIG.AHDB_URL_KEY, '')
-                     || GM_getValue(CONFIG.LEGACY_KEYS.url, '') || '';
-            return url.replace(/\/+$/, '');
+            return (GM_getValue(CONFIG.AHDB_URL_KEY, '') || '').replace(/\/+$/, '');
         },
         token() {
-            return GM_getValue(CONFIG.AHDB_TOKEN_KEY, '')
-                || GM_getValue(CONFIG.LEGACY_KEYS.token, '') || '';
+            return GM_getValue(CONFIG.AHDB_TOKEN_KEY, '') || '';
         },
         isAhdb() {
             return this.id() === 'ahdb' && !!this.url() && !!this.token();
@@ -1254,8 +1244,9 @@
             }
             const token = prompt(
                 'API token for ' + url.trim() + '\n\n' +
-                '(the API token from the server\'s .env, MUG_API_TOKEN — it is stored in this ' +
-                'userscript manager only, and never sent anywhere else)',
+                '(AH_API_TOKEN from the server\'s .env — the same value for everyone who uses ' +
+                'that server. Stored in this userscript manager only, and never sent anywhere ' +
+                'else.)',
                 ''
             );
             if (token === null || token.trim() === '') {
@@ -1338,7 +1329,7 @@
             return 'token rejected — reconfigure from the userscript menu';
         }
         if (ahdb && status === 503) {
-            return 'AH DB API is disabled (MUG_API_TOKEN unset in the server\'s .env)';
+            return 'AH DB API is disabled (AH_API_TOKEN unset in the server\'s .env)';
         }
         if (status === 429) {
             return 'rate limited — wait a moment';

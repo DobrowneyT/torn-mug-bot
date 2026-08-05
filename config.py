@@ -171,17 +171,24 @@ ANONMATCH_MIN_CONFIDENCE = float(os.environ.get("MUG_ANONMATCH_MIN_CONFIDENCE", 
 # It is a bearer token over plain HTTP, so treat it as "people I gave it to" rather than as
 # security — anyone on the path can read it. It stops casual discovery of the port, which is what
 # it is for. Rotate it by changing this and restarting.
-API_TOKEN = (os.environ.get("MUG_API_TOKEN") or "").strip()
+#
+# ONE token for everyone, so it is a door key, not an account: handing it to a second person means
+# the access log can only tell them apart by IP, and taking it back from one means rotating it for
+# all of them. AH_ rather than MUG_ because the read API belongs to the auction-house database,
+# which is standalone and may not always live in this repo. No fallback to the old name on purpose
+# — a secret that keeps working under a name you thought you had retired is worse than an API that
+# audibly refuses to start (main.py logs exactly why).
+API_TOKEN = (os.environ.get("AH_API_TOKEN") or "").strip()
 # Requests per minute per token+IP. A shared token leaks eventually; this bounds what that costs.
-API_RATE_PER_MIN = int(os.environ.get("MUG_API_RATE_PER_MIN", "60"))
+API_RATE_PER_MIN = int(os.environ.get("AH_API_RATE_PER_MIN", "60"))
 # Every request is logged here with its source IP — who used it, when, and what they asked for.
-API_ACCESS_LOG = os.environ.get("MUG_API_ACCESS_LOG", "/var/log/mug-bot-api.log")
-API_ACCESS_LOG_MAX_BYTES = int(os.environ.get("MUG_API_ACCESS_LOG_MAX_BYTES", str(10 * 1024 * 1024)))
-API_ACCESS_LOG_BACKUPS = int(os.environ.get("MUG_API_ACCESS_LOG_BACKUPS", "5"))
+API_ACCESS_LOG = os.environ.get("AH_API_ACCESS_LOG", "/var/log/mug-bot-api.log")
+API_ACCESS_LOG_MAX_BYTES = int(os.environ.get("AH_API_ACCESS_LOG_MAX_BYTES", str(10 * 1024 * 1024)))
+API_ACCESS_LOG_BACKUPS = int(os.environ.get("AH_API_ACCESS_LOG_BACKUPS", "5"))
 # Only trust X-Forwarded-For when something you control actually sets it. Off by default because a
 # client can send that header itself: trusting it unconditionally means the access log records
 # whatever IP the caller felt like claiming, which is worse than no log at all.
-API_TRUST_PROXY = (os.environ.get("MUG_API_TRUST_PROXY", "false") or "").strip().lower() in (
+API_TRUST_PROXY = (os.environ.get("AH_API_TRUST_PROXY", "false") or "").strip().lower() in (
     "1", "true", "yes")
 
 # ---- Logging ----
