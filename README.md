@@ -388,6 +388,28 @@ Dropping any of them hides precisely the cases worth doubting. The date is a liv
 timestamp taken from the win itself, so it stays correct as the embed ages in the channel (the
 stored `age_days` froze at match time, which drifts by however long the listing then sat).
 
+**The auction house is the LAST step in the pipeline, not a shortcut past it:**
+
+```
+item market API  ->  a uid, and no seller
+item-matcher     ->  the seller, definitively — or "this listing is anonymous"
+anon cache       ->  the uids the matcher could not name
+auction house    ->  a guess, for those and ONLY those
+```
+
+`unmatched_gear` used to be folded into the candidate set alongside the anon cache, which inverted
+that order. A uid sitting in that table is not a dead end — it is a **queue entry**, waiting for a
+human to open the listing and read the seller's name off it. Guessing at it first is wrong twice
+over: a ~77% inference pre-empts an answer that would have been certain, and because attributing a
+uid removes it from `unmatched_gear`, the guess **deletes the queue entry that would have produced
+the certain answer**. The inference eats the pipeline that grounds it.
+
+It is gated in two places — `run_match` will not create such a row, and `reconcile_gear` will not
+act on one that already exists. Two gates for one rule is deliberate: the poller must not depend on
+another component's table being clean, because the failure is silent and it blames a named player.
+On the database at the time this landed, 368 tracked listings had been attributed this way; they
+are dropped at startup and re-enter the capture queue on the next poll.
+
 Three precedence rules govern it, and each one is a way to blame the wrong player:
 
 - **direct beats inferred.** A captured seller overrides an AH inference — *including* when the

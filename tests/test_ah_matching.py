@@ -131,18 +131,50 @@ def test_a_directly_captured_seller_drops_the_inference(tmp_path, monkeypatch):
     _both(scenario, tmp_path, monkeypatch, "i")
 
 
-def test_match_also_covers_unmatched_gear(tmp_path, monkeypatch):
-    """Gear on the market with no captured seller is the other place an AH win helps."""
+def test_gear_awaiting_the_item_matcher_is_never_inferred(tmp_path, monkeypatch):
+    """The pipeline has an order, and the auction house is at the END of it:
+
+        item market API  ->  a uid, no seller
+        item-matcher     ->  the seller, definitively — or "this listing is anonymous"
+        anon cache       ->  the uids the matcher could not name
+        auction house    ->  a guess, for those and ONLY those
+
+    `unmatched_gear` used to be folded into the candidate set alongside the anon cache. That
+    inverted it. A uid sitting in that table is not a dead end, it is a QUEUE ENTRY — a human is
+    going to open that listing and read the seller's name off it. Guessing first is wrong twice:
+    a ~77% inference pre-empts an answer that would have been certain, and since attributing a uid
+    removes it from `unmatched_gear`, the guess DELETES the queue entry that would have produced
+    the certain answer. The inference eats the pipeline that grounds it.
+    """
     async def scenario():
         now = int(time.time())
         await db.upsert_unmatched_gear(uid="g1", item_id=399, item_name="M", price=1,
                                        stat=1.0, accuracy=1.0)
         await ah_db.record_auctions([_win(1, "g1", 700, now - DAY)])
         result = await ah_scraper.run_match()
-        assert result["resolved"] == 1
-        assert (await db.get_anon_match("g1"))["buyer_id"] == 700
+        assert result["resolved"] == 0, "guessed at a uid the item-matcher has not seen yet"
+        assert await db.get_anon_match("g1") is None
+        assert await db._scalar1("SELECT COUNT(*) FROM unmatched_gear WHERE uid='g1'") == 1, \
+            "the capture queue entry was consumed by a guess"
 
     _both(scenario, tmp_path, monkeypatch, "g")
+
+
+def test_the_same_uid_becomes_eligible_once_the_matcher_calls_it_anonymous(tmp_path, monkeypatch):
+    """The gate is the matcher's verdict, not the passage of time. Once it reports the listing as
+    anonymous there IS no better evidence coming, and the auction house is the best left."""
+    async def scenario():
+        now = int(time.time())
+        await db.upsert_unmatched_gear(uid="g1", item_id=399, item_name="M", price=1,
+                                       stat=1.0, accuracy=1.0)
+        await ah_db.record_auctions([_win(1, "g1", 700, now - DAY)])
+        assert (await ah_scraper.run_match())["resolved"] == 0
+
+        await db.mark_anon_uid(uid="g1", item_name="M", stat=1.0, accuracy=1.0, price=1)
+        assert (await ah_scraper.run_match())["resolved"] == 1
+        assert (await db.get_anon_match("g1"))["buyer_id"] == 700
+
+    _both(scenario, tmp_path, monkeypatch, "g2")
 
 
 def test_match_is_idempotent_and_refreshes_a_newer_win(tmp_path, monkeypatch):
@@ -325,3 +357,24 @@ def test_the_migration_is_idempotent(tmp_path):
             await ah_db.close_db()
 
     asyncio.run(scenario())
+
+
+def test_startup_clears_inferences_that_skipped_the_item_matcher(tmp_path, monkeypatch):
+    """A one-off for rows written under the old rule. There is nothing to correct them TO — the
+    right answer is "we do not know yet, ask the item-matcher" — so they are deleted, and the next
+    poll re-files each uid in the capture queue where it belonged. Idempotent: with the rule in
+    force no new row can qualify."""
+    async def scenario():
+        await db.mark_anon_uid(uid="ok", item_name="M", stat=1.0, accuracy=1.0, price=1)
+        for uid in ("ok", "skipped"):
+            await db.upsert_tracked_gear(uid=uid, item_id=399, item_name="M", price=1,
+                                         seller_id=700, attribution="auction")
+        await db.upsert_tracked_gear(uid="captured", item_id=399, item_name="M", price=1,
+                                     seller_id=800, attribution="matcher")
+
+        assert await db._drop_inferences_that_skipped_the_matcher() == 1
+        tracked = await db.get_tracked_uids_for_item(399)
+        assert set(tracked) == {"ok", "captured"}, "cleared the wrong rows"
+        assert await db._drop_inferences_that_skipped_the_matcher() == 0, "not idempotent"
+
+    _both(scenario, tmp_path, monkeypatch, "cleanup")

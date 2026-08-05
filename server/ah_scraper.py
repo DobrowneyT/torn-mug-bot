@@ -473,15 +473,19 @@ async def run_match() -> Dict:
     """
     from server import db
 
+    # ONLY the anon cache. `unmatched_gear` used to be folded in here, which inverted the
+    # pipeline: a uid waiting for a human to capture its seller definitively would instead be
+    # guessed at, and the guess then removed it from the queue so the human was never asked. The
+    # auction house is the fallback for listings the matcher CANNOT name, not a shortcut past it.
     anon = await db.get_anon_uid_set()
-    cur = await db._db.execute("SELECT uid FROM unmatched_gear")
-    unmatched = {r[0] for r in await cur.fetchall()}
-    candidates = set(anon) | unmatched
+    candidates = set(anon)
 
     if not candidates:
         result = await db.replace_anon_matches([], candidates)
-        log.info("ah match: no un-attributed uids")
-        return {"candidates": 0, **result}
+        log.info("ah match: no anonymous uids to resolve")
+        # Same keys as the normal return. This branch used to omit `resolved`/`high_confidence`,
+        # so anything reading the result had a KeyError waiting for the first quiet run.
+        return {"candidates": 0, "resolved": 0, "high_confidence": 0, "by_source": {}, **result}
 
     # Unsold auctions are only considered once seller-side inference has been calibrated. While
     # AH_SELLER_CONFIDENCE_BANDS is None they are excluded from the lookup entirely, so an unsold
