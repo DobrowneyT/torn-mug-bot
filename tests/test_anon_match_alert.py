@@ -400,3 +400,61 @@ def test_the_last_action_line_is_always_present(tmp_path, monkeypatch):
         assert "Last action:" in text and "*unknown*" in text
 
     _run(scenario, tmp_path, monkeypatch, "lastaction")
+
+
+# --------------------------------- enrichment for a player we never captured -------------
+
+def test_an_inferred_seller_we_have_never_captured_still_gets_enriched(tmp_path, monkeypatch):
+    """The bug this file's own fakes were hiding.
+
+    Every writer of `sellers` is a CAPTURE path — the item-matcher POST, and the WS `add` event
+    (explicitly `if not anon`). `update_seller_enrichment` was a bare UPDATE, so for a player we
+    had never watched list anything it matched zero rows: the profile, job and battle stats were
+    fetched over the network and silently discarded, and `enrich_seller` returned None.
+
+    An INFERRED seller is exactly that player — never captured is the entire premise. On the live
+    database it was 42% of inferred uids (488 of 1,172). The visible symptoms were an embed with a
+    bare user id and no last-action line; the invisible one was that the de-list guard could not
+    run, because it keys on a last action we had thrown away.
+
+    So this test fakes `torn.get_profile` — the network boundary — and NOT `enrich_seller`. Faking
+    the latter is what let the defect through: the fake was more capable than the real thing.
+    """
+    from server import bsp, enrich, torn
+
+    async def fake_profile(client, user_id):
+        return {"name": "NeverSeen", "status": {"state": "Okay"},
+                "last_action": {"timestamp": int(time.time()) - DAY, "status": "Offline"},
+                "faction_id": 0}
+
+    monkeypatch.setattr(torn, "get_profile", fake_profile)
+    monkeypatch.setattr(torn, "get_job", lambda *a, **k: _none())
+    monkeypatch.setattr(bsp, "get_tbs", lambda *a, **k: _none())
+
+    async def scenario():
+        # After _run's own setup, which stubs enrichment wholesale — here we want the REAL thing.
+        monkeypatch.setattr(detection, "enrich_seller", enrich.enrich_seller)
+        monkeypatch.setattr(detection, "enrich_clothing", enrich.enrich_clothing)
+        monkeypatch.setattr(detection, "_http", lambda: None)
+
+        await _anon_uid_won_at_auction(buyer_id=4242)
+        assert await db.get_seller(4242) is None, "precondition: this player is unknown to us"
+
+        bot = FakeBot()
+        await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
+        await api_poller.reconcile_gear(bot, ITEM, {}, item_label="ArmaLite M-15A4")
+        await api_poller.drain_sale_tasks()
+
+        row = await db.get_seller(4242)
+        assert row is not None, "enrichment was fetched and then thrown away"
+        assert row["name"] == "NeverSeen", "the profile name was not stored"
+        assert row["last_action_ts"], "no last action -> the de-list guard cannot run"
+
+        assert len(bot.alerts) == 1, "an inferred alert was dropped for want of a profile"
+        assert bot.alerts[0]["seller_name"] == "NeverSeen"
+
+    _run(scenario, tmp_path, monkeypatch, "unknown_seller")
+
+
+async def _none():
+    return None

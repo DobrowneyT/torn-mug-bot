@@ -60,6 +60,11 @@ async def enrich_seller(user_id: int, client: httpx.AsyncClient, *, force: bool 
 
     prof = _ok("profile")
     if prof is not None:
+        # The profile is the authoritative source for the name, and for an INFERRED seller it is
+        # the ONLY one: `sellers.name` is otherwise written exclusively by the capture paths, so a
+        # player we never watched list anything had no name to show and the embed fell back to a
+        # bare user id.
+        fields["name"] = prof.get("name")
         st = prof.get("status") or {}
         fields["status_state"] = st.get("state")
         fields["status_until"] = st.get("until")
