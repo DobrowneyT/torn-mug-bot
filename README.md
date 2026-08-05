@@ -383,7 +383,11 @@ posts with its provenance stated:
 > 🕵️ **Anon match** — seller inferred from the auction house: Buyer4242 won this item for
 > $9,000,000 3 days ago · ~88% likely correct
 
-Every part of that line is always present — buyer, price, when, and the measured confidence.
+The buyer's name is omitted, because the `Owner:` line above is the same player — **unless the two
+disagree**, which is worth seeing rather than tidying away: it means the profile and the auction
+house name different players. A rename does that innocently; so does a wrong match.
+
+Every other part of the line is always present — price, when, and the measured confidence.
 Dropping any of them hides precisely the cases worth doubting. The date is a live Discord
 timestamp taken from the win itself, so it stays correct as the embed ages in the channel (the
 stored `age_days` froze at match time, which drifts by however long the listing then sat).
