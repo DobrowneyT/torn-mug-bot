@@ -851,11 +851,26 @@ async def get_seller(user_id) -> Optional[Dict]:
 
 
 async def update_seller_enrichment(user_id, fields: Dict) -> None:
+    """Store what enrichment learned, CREATING the row if this player is new to us.
+
+    It was a bare UPDATE, which silently matched zero rows for anyone we had never captured
+    listing something — and every writer of `sellers` is a capture path. So for a seller INFERRED
+    from an auction win, the profile, job and battle stats were fetched over the network and then
+    thrown away, every time, leaving the alert with no name and no last action. On this database
+    that was 42% of inferred uids (488 of 1,172).
+    """
     fields = {k: v for k, v in (fields or {}).items() if v is not None}
     if not fields:
         return
-    cols = ", ".join(f"{k}=?" for k in fields)
-    await _db.execute(f"UPDATE sellers SET {cols} WHERE user_id=?", (*fields.values(), user_id))
+    cols = ", ".join(fields)
+    placeholders = ", ".join("?" * len(fields))
+    updates = ", ".join(f"{k}=excluded.{k}" for k in fields)
+    await _db.execute(
+        f"""INSERT INTO sellers(user_id, first_seen, last_seen, {cols})
+            VALUES (?,?,?,{placeholders})
+            ON CONFLICT(user_id) DO UPDATE SET {updates}""",
+        (user_id, _now(), _now(), *fields.values()),
+    )
     await _commit()
 
 

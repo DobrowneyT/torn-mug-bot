@@ -420,6 +420,13 @@ worth showing you. For one we never saw list anything, it is a competing explana
 alert — and a likelier one, since the item vanishing while they were active is better explained by
 them pulling their own listing. Two unknowns stacked is not an alert, it is a guess.
 
+A seller inferred from an auction win is, by definition, someone we have **never captured listing
+anything** — and every writer of the `sellers` table is a capture path. Enrichment used to be a
+bare `UPDATE`, so for those players it fetched the profile, job and battle stats over the network
+and then matched zero rows: no name, no last action, nothing stored. 42% of inferred uids on this
+database (488 of 1,172). It upserts now, and stores the name off the profile, which for an inferred
+seller is the only source there is.
+
 The profile lookup is retried once before giving up, since it is also what supplies the name and
 the last action. Both now always appear: the seller falls back to the name on the AH win rather
 than a bare user id, and an unknown last action prints as `*unknown*` rather than the line silently
