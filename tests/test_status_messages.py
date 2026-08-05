@@ -66,3 +66,15 @@ def test_commands_registered_including_help():
     watch = next(c for c in bot.tree.get_commands() if c.name == "watch")
     assert isinstance(watch, app_commands.Group)
     assert {"add", "remove", "enable", "disable", "clear", "list"} <= {s.name for s in watch.commands}
+
+
+def test_mugged_command_is_registered_once():
+    """A command registered twice raises at sync time and takes every slash command down with it —
+    which has happened here before (`/anonmatch`, via an explicit add_command on top of the
+    decorator)."""
+    from bot.discord_bot import MugBot
+
+    bot = MugBot()
+    bot._register_commands()
+    names = [c.name for c in bot.tree.get_commands()]
+    assert names.count("mugged") == 1, names

@@ -23,7 +23,7 @@ from discord.ext import tasks
 
 import config
 from bot import formatter, state
-from server import db, detection, item_names
+from server import db, detection, item_names, mug
 from server import keys as keypool
 
 log = logging.getLogger("mug.bot")
@@ -600,6 +600,71 @@ class MugBot(discord.Client):
                 f"{resolved}\n"
                 f"*Confidence is measured, not guessed: it is how often an AH-inferred owner turned "
                 f"out to be the actual seller for evidence that old. See `ah_scrape.py calibrate`.*",
+                ephemeral=True)
+
+        # ----------------------------- /mugged ----------------------------
+        # A human label for how an alert actually turned out. Deliberately records the AMOUNT and
+        # not a verdict — see the mug_feedback table comment for why the interpretation is not
+        # fixed. Second, independent evidence stream; never merged with the passive one.
+        @self.tree.command(
+            name="mugged",
+            description="Report what a mug actually returned, to score the alerts")
+        @app_commands.describe(
+            player="Torn user id of the person you mugged",
+            amount="What the mug returned. 0 is a real answer and the most informative one.",
+            note="Optional: anything the number does not capture")
+        async def mugged(interaction: discord.Interaction, player: str,
+                         amount: str, note: Optional[str] = None):
+            try:
+                seller_id = int(str(player).strip().lstrip("[").rstrip("]"))
+            except ValueError:
+                await interaction.response.send_message(
+                    "`player` needs to be a Torn user id (the number in their profile URL).",
+                    ephemeral=True)
+                return
+            got = _parse_amount(amount)
+            if got is None or got < 0:
+                await interaction.response.send_message(
+                    "`amount` should be a number — `0`, `2.5m`, `12000000` all work.",
+                    ephemeral=True)
+                return
+
+            sale = await db.latest_gear_sale(seller_id)
+            if sale is None:
+                await interaction.response.send_message(
+                    f"No gear sale on record for **{seller_id}**, so there is no alert to attach "
+                    f"this to. Feedback is only useful tied to a specific prediction.",
+                    ephemeral=True)
+                return
+
+            expected = mug.compute_mug(
+                sale["total_value"],
+                min_value=await db.get_config("min_mug_value", config.MIN_MUG_VALUE))
+            await db.record_mug_feedback(
+                seller_id=seller_id, amount=got, sale=sale,
+                expected={"min": expected.mug_min, "max": expected.mug_max}, note=note)
+
+            # The reading, stated rather than stored — so it can change without the data changing.
+            if got == 0:
+                verdict = ("**$0** — they banked it, or the match was wrong. Those are the only "
+                           "two explanations: mug protection is never total, so a correct match "
+                           "always returns *something*.")
+            elif got < expected.mug_min:
+                verdict = (f"below the predicted **{formatter.fmt_money(expected.mug_min)}** — "
+                           f"partly banked, or a weaker match than we thought.")
+            else:
+                verdict = "in the predicted range — the attribution looks right."
+            inferred = ""
+            if sale.get("attribution") == "auction":
+                conf = sale.get("confidence")
+                how_sure = f" (~{conf * 100:.0f}% confident)" if conf else ""
+                inferred = (f"\nThis seller was **inferred** from an auction win{how_sure}, so "
+                            f"this is the feedback that matters most — it is the only direct "
+                            f"evidence about whether the inference was right.")
+            await interaction.response.send_message(
+                f"📝 Recorded **{formatter.fmt_money(got)}** for `{seller_id}` "
+                f"(sale: {sale['item_name']}, {formatter.fmt_money(sale['total_value'])}).\n"
+                f"{verdict}{inferred}",
                 ephemeral=True)
 
         # ----------------------------- /hosplock --------------------------

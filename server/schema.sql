@@ -89,6 +89,34 @@ CREATE INDEX IF NOT EXISTS idx_sales_seller ON sales(seller_id, sold_at);
 -- runs — indexing it here raises "no such column" and takes init_db, and therefore the whole
 -- process, down on restart. It is created in _ensure_columns, after the ALTERs. See _POST_MIGRATION_INDEXES.
 
+-- What a mug actually returned, reported by a human with /mugged.
+--
+-- A SECOND, INDEPENDENT label source for the anon-match inference, kept apart from the passive one
+-- (a later direct capture of the same uid) rather than averaged with it. The two are biased in
+-- opposite directions: this one is selected on alerts somebody chose to act on, the passive one on
+-- uids that happen to reappear in a NAMED listing. Merging them would hide both biases.
+--
+-- The AMOUNT is stored, never a verdict, because the interpretation is not fixed:
+--   $0            they banked it, OR the match was wrong. Mug protection is never total, so a
+--                 correct match against a recently-mugged target still returns something —
+--                 which makes $0 the one outcome that cannot be explained by protection.
+--   well below    partly banked, or a weaker match
+--   in range      the match looks right
+-- Storing "good"/"bad" would bake today's reading of that into the data permanently.
+CREATE TABLE IF NOT EXISTS mug_feedback (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id     INTEGER,          -- the gear sale that triggered the alert, if we could match one
+    seller_id   INTEGER NOT NULL,
+    amount      INTEGER NOT NULL, -- what the mug actually returned; 0 is a real and useful value
+    expected_min INTEGER,         -- the range the alert predicted, frozen so a later config
+    expected_max INTEGER,         -- change cannot silently rewrite what we promised
+    attribution TEXT,             -- how the seller was known: 'matcher' | 'auction'
+    confidence  REAL,             -- the inference's P(correct), when there was one
+    note        TEXT,
+    noted_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mug_feedback_seller ON mug_feedback(seller_id, noted_at);
+
 -- Which pages/categories are being actively viewed right now (drives status-tracker).
 -- last_ping_at is refreshed by the userscript heartbeat only while a page is actively
 -- viewed; staleness => the page is shown red/offline.

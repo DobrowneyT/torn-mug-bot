@@ -209,3 +209,72 @@ def test_the_report_does_not_crash_on_an_empty_database(tmp_path, monkeypatch, c
         assert "nothing to judge" in capsys.readouterr().out
 
     _run(scenario, tmp_path, monkeypatch, "empty")
+
+
+# --------------------------------- the human label stream --------------------------------
+
+def test_feedback_stores_the_amount_and_the_prediction_it_was_judged_against(tmp_path, monkeypatch):
+    """The amount, never a verdict. "$0" means banked OR wrong match, and which of those it is
+    depends on a banking model that will change — so baking today's reading into the stored data
+    would make the record unusable the moment the reading improves.
+
+    The predicted range is frozen alongside it, because /mugmin and the protection hours are both
+    live-tunable: without this, changing them would silently rewrite what we had promised."""
+    async def scenario():
+        now = int(time.time())
+        sale_id = await _sale("u1", 111, at=now, attribution="auction", confidence=0.88)
+        await db.record_mug_feedback(seller_id=111, amount=0,
+                                     sale={"id": sale_id, "attribution": "auction",
+                                           "confidence": 0.88},
+                                     expected={"min": 5_000_000, "max": 15_000_000})
+
+        row = (await db.mug_feedback_rows())[0]
+        assert row["amount"] == 0, "a zero mug is a real observation, not a missing one"
+        assert row["attribution"] == "auction" and row["confidence"] == 0.88
+        assert row["expected_min"] == 5_000_000 and row["expected_max"] == 15_000_000
+        assert "verdict" not in row
+
+    _run(scenario, tmp_path, monkeypatch, "fb_store")
+
+
+def test_the_report_keeps_human_feedback_apart_from_the_passive_labels(tmp_path, monkeypatch, capsys):
+    """Merging them would produce a number that is neither, and hide both biases while doing it:
+    this sample is selected on alerts someone chose to act on, the other on uids that happen to
+    reappear in a named listing."""
+    async def scenario():
+        now = int(time.time())
+        sale_id = await _sale("u1", 111, at=now, attribution="auction", confidence=0.88)
+        for amount in (0, 1_000_000, 9_000_000):
+            await db.record_mug_feedback(
+                seller_id=111, amount=amount,
+                sale={"id": sale_id, "attribution": "auction", "confidence": 0.88},
+                expected={"min": 5_000_000, "max": 15_000_000})
+
+        await ah_scraper.show_verdict()
+        out = capsys.readouterr().out
+        assert "/mugged feedback on inferred sellers (3 reported)" in out
+        assert "returned $0" in out and "below the prediction" in out
+        assert "Kept separate from the table above" in out
+        # the band table must be unchanged by it
+        assert "checkable" in out
+
+    _run(scenario, tmp_path, monkeypatch, "fb_report")
+
+
+def test_feedback_on_a_captured_seller_is_not_counted_as_evidence_about_inference(tmp_path,
+                                                                                  monkeypatch,
+                                                                                  capsys):
+    """A $0 mug on a seller we OBSERVED listing the item says something about banking, and nothing
+    at all about whether the auction-house inference works."""
+    async def scenario():
+        now = int(time.time())
+        sale_id = await _sale("u1", 111, at=now, attribution="matcher")
+        await db.record_mug_feedback(seller_id=111, amount=0,
+                                     sale={"id": sale_id, "attribution": "matcher"},
+                                     expected={"min": 5_000_000, "max": 15_000_000})
+
+        await ah_scraper.show_verdict()
+        out = capsys.readouterr().out
+        assert "none of them on an inferred seller yet" in out
+
+    _run(scenario, tmp_path, monkeypatch, "fb_matcher")

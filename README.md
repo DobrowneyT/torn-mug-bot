@@ -495,6 +495,30 @@ Three things to read carefully, all printed with the numbers:
 - **Ownership can change** between the sale and the later capture, which counts as a contradiction
   even where the inference was right at the time.
 
+### Telling it what actually happened (`/mugged`)
+
+```
+/mugged player: 2250591  amount: 0
+```
+
+A second, independent label. The passive one above needs a uid to reappear in a *named* listing,
+which for a habitually-anonymous seller may never happen; this arrives immediately, for exactly the
+alerts you acted on.
+
+**$0 is the most informative answer you can give.** Mug protection is never total — a recently
+mugged target still yields *something* — so a zero return has only two explanations: they banked
+it, or the seller was the wrong person. Every other outcome is muddier.
+
+The **amount** is stored, never a verdict, and the predicted range is frozen alongside it. Which
+reading applies to a given number depends on the banking model, and that model will change; storing
+"good"/"bad" would bake today's interpretation in permanently. Freezing the range matters for the
+same reason — `/mugmin` and the protection hours are live-tunable, so without it a later change
+would silently rewrite what we had promised.
+
+`verdict` prints this as its own section and **never merges it** with the passive labels. The two
+are biased in opposite directions: this sample is selected on alerts someone chose to act on, that
+one on uids that happen to resurface openly. An average of the two is neither, and hides both.
+
 Inferred sales are excluded from the ground truth in both `verdict` and `calibrate`. They are the
 model's own output, and scoring against them would have the inference confirm itself — which would
 have looked like excellent accuracy, because the same rule produced both sides.
