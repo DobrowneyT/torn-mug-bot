@@ -452,7 +452,7 @@ kept as two rows (the primary key includes an ordinal) rather than collapsing.
 
 ### Serving the ledger (the price-checker API)
 
-Off unless `MUG_API_TOKEN` is set — an endpoint publishing 548k rows of named players' purchase
+Off unless `AH_API_TOKEN` is set — an endpoint publishing 548k rows of named players' purchase
 history should be switched on deliberately, never by upgrading. Fail closed.
 
 ```bash
@@ -465,7 +465,10 @@ python3 -c 'import secrets; print(secrets.token_urlsafe(32))'   # then put it in
 | `GET /api/auctions/meta` | row count, coverage span, freshness, max page size |
 
 Both take `Authorization: Bearer <token>` (or an `apikey` header — the userscript already sends
-one). Every request is logged to `MUG_API_ACCESS_LOG` with its source IP, including the rejections,
+one). **One token for everyone**, so it is a door key rather than an account: give it to a second
+person and the access log can only tell them apart by IP, and taking it back from one means
+rotating it for all of them. Fine for a handful of people you know; if it ever needs to be more
+than that, it needs per-user tokens, not a longer shared one. Every request is logged to `AH_API_ACCESS_LOG` with its source IP, including the rejections,
 which are the ones worth having:
 
 ```
@@ -473,7 +476,7 @@ which are the ones worth having:
 2026-08-03 12:07:02 ip=192.0.2.7   status=401 path=/api/auctions/search ua='curl/8.5.0' bad-token took=0ms
 ```
 
-The token is never written to that log. `X-Forwarded-For` is ignored unless `MUG_API_TRUST_PROXY`
+The token is never written to that log. `X-Forwarded-For` is ignored unless `AH_API_TRUST_PROXY`
 is on, because a client can send that header itself — trusting it by default would mean the log
 faithfully records whichever IP the caller chose to claim.
 
@@ -489,7 +492,7 @@ Skipping this is not fatal: the records fall back to the service journal with a 
 where they went, which is worth more than a silently missing access log. But they are then mixed in
 with everything else, which is exactly the thing a separate access log is for.
 
-Rate limited per token+IP (`MUG_API_RATE_PER_MIN`, default 60). A shared token leaks eventually;
+Rate limited per token+IP (`AH_API_RATE_PER_MIN`, default 60). A shared token leaks eventually;
 this bounds what that costs.
 
 **It is plain HTTP.** The token, the queries and the results all cross the network in the clear, so
@@ -497,7 +500,7 @@ anyone on the path can read the token and then use it. That is a considered trad
 oversight — the token grants read-only access to auction history that is public in-game anyway — but
 it does mean this token should never be reused for anything else, and rotating it is a `.env` edit
 and a restart. Putting a reverse proxy with a certificate in front (which needs a domain name, not
-just the IP) closes it; set `MUG_API_TRUST_PROXY=true` at the same time so the log keeps recording
+just the IP) closes it; set `AH_API_TRUST_PROXY=true` at the same time so the log keeps recording
 real client IPs.
 
 The bot opens the ledger **read-only**. The scraper owns that file, and read-only means a bug on
@@ -525,14 +528,13 @@ the server deliberately answers in the field names the script already renders (`
 
 It calls the thing it talks to the **AH DB**, never "mug bot". The auction-house half of this
 project is standalone — its own SQLite file, its own scraper, its own read API, no foreign keys
-into `mug_bot.db` — so the naming does not tie it to the repo it currently lives in. (Migrating an
-install from the older key names is automatic; the settings are read under both.)
+into `mug_bot.db` — so the naming does not tie it to the repo it currently lives in.
 
 Install it, then on the first search it asks for the server address and token:
 
 ```
 Address of your self-hosted AH database.  →  http://<host>:3001
-API token for http://<host>:3001          →  the MUG_API_TOKEN from .env
+API token for http://<host>:3001          →  the AH_API_TOKEN from .env
 ```
 
 Both go into the userscript manager's storage, **not** into the file — so the address can move

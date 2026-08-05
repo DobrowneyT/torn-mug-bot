@@ -114,7 +114,7 @@ async def amain() -> None:
         except Exception:
             log.exception("could not open the AH ledger read-only — /api/auctions/* will fail")
     else:
-        log.info("read API disabled (MUG_API_TOKEN not set)")
+        log.info("read API disabled (AH_API_TOKEN not set)")
 
     app = create_app(bot)
     server = uvicorn.Server(
