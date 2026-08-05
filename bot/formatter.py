@@ -181,8 +181,12 @@ def build_mug_alert_embed(event: Dict) -> discord.Embed:
         # time incl. seconds. Both update on the reader's client without us re-editing.
         lines.append(f"Detected: <t:{ts}:R> (<t:{ts}:T>)")
 
+    # The headline item duplicates the Sales list below, which already names it with a relative
+    # time — so it is only worth a line when there is no Sales list to carry it (a hospital
+    # re-post, where the window has been claimed). Same for the gear stats: they identify WHICH
+    # weapon was listed, which matters when matching a listing and not at all when mugging cash.
     item_name = event.get("item_name")
-    if item_name:
+    if item_name and not (event.get("sales") or []):
         stats = event.get("item_stats") or {}
         bits = []
         if stats.get("damage") is not None:
@@ -221,7 +225,10 @@ def build_mug_alert_embed(event: Dict) -> discord.Embed:
     else:
         n = event.get("num_sales")
         suffix = f" ({n} sale{'s' if n != 1 else ''})" if n else ""
-        lines.append(f"Expected value: **{fmt_money(event.get('value_change'))}**{suffix}")
+        # "Expected value" read as the sale price, which sits three lines below at a DIFFERENT
+        # number — this one is after banking decay and mug protection. Naming it for what it
+        # estimates removes the apparent contradiction.
+        lines.append(f"Expected cash on hand: **{fmt_money(event.get('value_change'))}**{suffix}")
 
     lines.append(
         f"Mug range: **{fmt_money(event.get('mug_min'))} – {fmt_money(event.get('mug_max'))}**"
@@ -253,7 +260,12 @@ def build_mug_alert_embed(event: Dict) -> discord.Embed:
     # an inference and acting on an observation are different decisions and must not look alike.
     if event.get("attribution") == "auction":
         m = event.get("anon_match") or {}
-        who = m.get("buyer_name") or "this player"
+        # The buyer IS the owner named above, so repeating the name is clutter — EXCEPT when the
+        # two disagree, which is worth seeing: it means the profile and the auction house name
+        # different players, and that is a reason to distrust the inference rather than a cosmetic
+        # detail. (A rename does it innocently; so does a wrong match.)
+        ah_name = m.get("buyer_name")
+        who = f"{ah_name} " if ah_name and ah_name != event.get("seller_name") else ""
         price = f" for ${m['price']:,}" if m.get("price") else ""
         # Age is recomputed from the win timestamp rather than read from `age_days`, which is the
         # age at MATCH time. The two drift apart by however long the listing sat on the market, and
@@ -264,8 +276,7 @@ def build_mug_alert_embed(event: Dict) -> discord.Embed:
         conf = m.get("confidence")
         conf_txt = (f" · ~{conf * 100:.0f}% likely correct" if conf
                     else " · confidence unknown")
-        lines.append(f"🕵️ **Anon match** — seller inferred from the auction house: "
-                     f"{who} won this item{price}{when}{conf_txt}")
+        lines.append(f"🕵️ **Anon match** — {who}won it{when}{price}{conf_txt}")
 
     if event.get("faction"):
         lines.append(f"Faction: {event['faction']}")
@@ -276,9 +287,12 @@ def build_mug_alert_embed(event: Dict) -> discord.Embed:
         lines.append("**Sales:**")
         for s in sales[:10]:
             when = f"{_relative(s['ts'])} " if s.get("ts") else ""
-            lines.append(
-                f"• {when}{s.get('qty', 1)} × {s.get('item_name', '?')} — {fmt_money(s.get('price'))}"
-            )
+            # Linked here so dropping the Item line above costs nothing — that line's one piece of
+            # unique content was the jump to the market.
+            label = s.get("item_name", "?")
+            if s.get("item_id"):
+                label = f"[{label}]({config.ITEM_MARKET_URL.format(item_id=s['item_id'])})"
+            lines.append(f"• {when}{s.get('qty', 1)} × {label} — {fmt_money(s.get('price'))}")
 
     if uid:
         attack = config.ATTACK_URL.format(user_id=uid)

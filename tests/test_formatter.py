@@ -16,9 +16,34 @@ def test_fmt_money():
 def test_mug_alert_embed():
     e = formatter.build_mug_alert_embed(mock_data.mock_mug_event(1_700_000_000))
     assert "Mug opportunity" in e.title
-    assert "Expected value" in e.description
-    assert "Item: [Mag 7]" in e.description and "Damage: 66.86" in e.description
+    # Named for what it estimates. "Expected value" read as the sale price, which appears a few
+    # lines below at a different number — this one is after banking decay and mug protection.
+    assert "Expected cash on hand" in e.description
     assert "Attack!" in e.description and "Profile!" in e.description
+
+
+def test_the_headline_item_is_not_repeated_above_the_sales_list():
+    """The Sales list already names the item, with a relative time. A second copy at the top is
+    clutter, and the gear stats it carried identify WHICH weapon was listed — which matters when
+    matching a listing and not at all when deciding whether to mug someone."""
+    e = formatter.build_mug_alert_embed(mock_data.mock_mug_event(1_700_000_000))
+    assert "Item: " not in e.description
+    assert "Sales:" in e.description and "Mag 7" in e.description
+    assert "Damage: 66.86" not in e.description
+
+
+def test_the_item_line_returns_when_there_is_no_sales_list():
+    """A hospital re-post has its window already claimed, so there are no sales to name the item.
+    Dropping the line unconditionally would leave the embed saying nothing about what happened."""
+    event = {**mock_data.mock_mug_event(1_700_000_000), "sales": []}
+    text = formatter.build_mug_alert_embed(event).description
+    assert "Item: [Mag 7]" in text and "Damage: 66.86" in text
+
+
+def test_the_sales_list_links_the_item_to_the_market():
+    """The one piece of unique content the dropped Item line carried."""
+    e = formatter.build_mug_alert_embed(mock_data.mock_mug_event(1_700_000_000))
+    assert "[Mag 7](https://www.torn.com/page.php?sid=ItemMarket" in e.description
 
 
 def test_hospital_variant_embed():

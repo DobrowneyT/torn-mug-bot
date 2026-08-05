@@ -564,7 +564,8 @@ def _build_event(seller_id, seller: Optional[Dict], win: Dict, res, *, variant="
         # any other reason (self-hosp, attacked, medical) is NOT a mug.
         "was_mugged": "mug" in (seller.get("status_details") or "").lower(),
         "sales": [
-            {"item_name": s["item_name"], "qty": s["qty_sold"], "price": s["unit_price"], "ts": s["sold_at"]}
+            {"item_id": s.get("item_id"), "item_name": s["item_name"], "qty": s["qty_sold"],
+             "price": s["unit_price"], "ts": s["sold_at"]}
             for s in win["sales"][-10:]
         ],
     }

@@ -29,8 +29,14 @@ def mock_mug_event(now: int = None) -> Dict:
         "detected_ts": now - 16 * 3600,
         "faction": "ARKHAM A$YLUM",
         "in_clothing_store": False,
+        # The triggering sale IS in the window, so the headline item appears here too — that is
+        # what a real event looks like, and it is the reason the separate "Item:" line was dropped.
+        # item_id is what lets the list link to the market.
         "sales": [
-            {"item_name": "Skateboard", "qty": 1, "price": 45_000_000, "ts": now - 16 * 3600},
+            {"item_id": 206, "item_name": "Xanax", "qty": 1, "price": 488_286,
+             "ts": now - 20 * 3600},
+            {"item_id": 225, "item_name": "Mag 7", "qty": 1, "price": 45_000_000,
+             "ts": now - 16 * 3600},
         ],
     }
 
