@@ -518,15 +518,20 @@ scaling trap, not just a slow page.
 ### The price-checker userscript
 
 `userscripts/ah-price-checker.user.js` is **WinterValor [3945658]'s** script, MIT licensed, with one
-thing changed: the search reads from this ledger instead of the author's Supabase backend. The
+thing changed: the search reads from this database instead of the author's Supabase backend. The
 licence header and authorship are kept intact, and everything below `apiRequest()` is untouched —
 the server deliberately answers in the field names the script already renders (`stat_quality`,
 `bonus_values`, `timestamp`, …), so there was nothing else to change.
 
+It calls the thing it talks to the **AH DB**, never "mug bot". The auction-house half of this
+project is standalone — its own SQLite file, its own scraper, its own read API, no foreign keys
+into `mug_bot.db` — so the naming does not tie it to the repo it currently lives in. (Migrating an
+install from the older key names is automatic; the settings are read under both.)
+
 Install it, then on the first search it asks for the server address and token:
 
 ```
-Address of your mug-bot AH ledger.        →  http://<host>:3001
+Address of your self-hosted AH database.  →  http://<host>:3001
 API token for http://<host>:3001          →  the MUG_API_TOKEN from .env
 ```
 

@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         TORN Auction Price Checker (mug-bot ledger)
+// @name         TORN Auction Price Checker (MonChoon AH DB)
 // @namespace    https://torn.com/
-// @version      4.1.2-mug.1
-// @description  Check historical prices for similar auction items, served from a self-hosted AH ledger
+// @version      4.1.3-ahdb.1
+// @description  Check historical prices for similar auction items, served from a self-hosted AH database
 // @author       WinterValor [3945658]
 // @match        https://www.torn.com/amarket.php*
 // @match        https://www.torn.com/page.php?sid=ItemMarket*
@@ -25,9 +25,14 @@
 //
 // Fork note: the original is by WinterValor [3945658] and is MIT licensed; that licence and the
 // authorship above are kept intact. The only change is where the auction history comes from — the
-// search now goes to a self-hosted ledger scraped from Torn's own /market/auctionhouse endpoint
-// instead of the author's Supabase backend. Everything below apiRequest() is untouched, because the
-// server deliberately answers in the same field names this script already renders.
+// search now goes to a self-hosted auction-house database scraped from Torn's own
+// /market/auctionhouse endpoint, instead of the author's Supabase backend. Everything below
+// apiRequest() is untouched, because the server deliberately answers in the same field names this
+// script already renders.
+//
+// "AH DB" throughout means that self-hosted database. It is a standalone thing — its own SQLite
+// file, its own scraper, its own read API — and nothing here depends on the rest of the project it
+// currently lives in, so the naming does not tie it to one.
 //
 // The backend address and token live in GM storage, NOT in the source. Hardcoding a server address
 // into a userscript is how a previous script in this project ended up posting into the void after a
@@ -37,12 +42,15 @@
     'use strict';
 
     const CONFIG = {
-        // Where the mug-bot ledger lives. A DEFAULT, not a hardcoding: whatever is in GM storage
-        // wins, so moving the server is a menu command rather than a script edit.
-        MUG_URL_DEFAULT: 'http://51.68.212.98:3001',
-        MUG_URL_KEY: 'mug_api_url',
-        MUG_TOKEN_KEY: 'mug_api_token',
-        BACKEND_KEY: 'mug_backend',        // 'mug' | 'upstream'
+        // Where the self-hosted AH DB lives. A DEFAULT, not a hardcoding: whatever is in GM
+        // storage wins, so moving the server is a menu command rather than a script edit.
+        AHDB_URL_DEFAULT: 'http://51.68.212.98:3001',
+        AHDB_URL_KEY: 'ahdb_api_url',
+        AHDB_TOKEN_KEY: 'ahdb_api_token',
+        BACKEND_KEY: 'ahdb_backend',       // 'ahdb' | 'upstream'
+        // Superseded key names. Read once so an existing install is not silently logged out and
+        // re-prompted for a token it already has.
+        LEGACY_KEYS: { url: 'mug_api_url', token: 'mug_api_token', backend: 'mug_backend' },
         SUPABASE_URL: 'https://btrmmuuoofbonmuwrkzg.supabase.co',
         SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0cm1tdXVvb2Zib25tdXdya3pnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4NTEzMTgsImV4cCI6MjA4NDQyNzMxOH0.E-s0k46BORXLICAvxtEpqoM3Qmh4-TRLaJAwXO6wJTY',
         WEAV3R_API: 'https://weav3r.dev/api/ranked-weapons',
@@ -1198,26 +1206,33 @@
 
     // ------------------------------------------------------------------ backend selection
     //
-    // Two backends answer the same search in the same shape: the self-hosted mug-bot ledger, and
-    // the author's original Supabase. Which one served a result is shown in the footer, and
-    // switching is never automatic — a silent fallback would let "my server is down" look exactly
-    // like "there were no sales", which is the failure this script is meant to rule out.
+    // Two backends answer the same search in the same shape: the self-hosted AH DB, and the
+    // author's original Supabase. Which one served a result is shown in the footer, and switching
+    // is never automatic — a silent fallback would let "my server is down" look exactly like
+    // "there were no sales", which is the failure this script is meant to rule out.
 
     const backend = {
         id() {
-            return GM_getValue(CONFIG.BACKEND_KEY, '') || '';
+            const id = GM_getValue(CONFIG.BACKEND_KEY, '') || '';
+            if (id) return id;
+            // Migrate a pre-rename install rather than re-prompting: same setting, new key name.
+            const legacy = GM_getValue(CONFIG.LEGACY_KEYS.backend, '') || '';
+            return legacy === 'mug' ? 'ahdb' : legacy;
         },
         url() {
-            return (GM_getValue(CONFIG.MUG_URL_KEY, '') || '').replace(/\/+$/, '');
+            const url = GM_getValue(CONFIG.AHDB_URL_KEY, '')
+                     || GM_getValue(CONFIG.LEGACY_KEYS.url, '') || '';
+            return url.replace(/\/+$/, '');
         },
         token() {
-            return GM_getValue(CONFIG.MUG_TOKEN_KEY, '') || '';
+            return GM_getValue(CONFIG.AHDB_TOKEN_KEY, '')
+                || GM_getValue(CONFIG.LEGACY_KEYS.token, '') || '';
         },
-        isMug() {
-            return this.id() === 'mug' && !!this.url() && !!this.token();
+        isAhdb() {
+            return this.id() === 'ahdb' && !!this.url() && !!this.token();
         },
         label() {
-            if (this.isMug()) {
+            if (this.isAhdb()) {
                 try { return new URL(this.url()).host; } catch { return this.url(); }
             }
             return 'supabase (upstream)';
@@ -1229,9 +1244,9 @@
 
             const url = prompt(
                 'TORN Auction Price Checker\n\n' +
-                'Address of your mug-bot AH ledger.\n' +
+                'Address of your self-hosted AH database.\n' +
                 'Leave blank to use the original public backend instead.',
-                CONFIG.MUG_URL_DEFAULT
+                CONFIG.AHDB_URL_DEFAULT
             );
             if (url === null || url.trim() === '') {
                 GM_setValue(CONFIG.BACKEND_KEY, 'upstream');
@@ -1239,20 +1254,20 @@
             }
             const token = prompt(
                 'API token for ' + url.trim() + '\n\n' +
-                '(the MUG_API_TOKEN from the server\'s .env — it is stored in this userscript ' +
-                'manager only, and never sent anywhere else)',
+                '(the API token from the server\'s .env, MUG_API_TOKEN — it is stored in this ' +
+                'userscript manager only, and never sent anywhere else)',
                 ''
             );
             if (token === null || token.trim() === '') {
-                alert('No token given — the ledger requires one, so the original public backend ' +
-                      'will be used. Re-run "Configure mug-bot backend" from the userscript menu ' +
+                alert('No token given — the AH DB requires one, so the original public backend ' +
+                      'will be used. Re-run "Configure AH DB backend" from the userscript menu ' +
                       'to change this.');
                 GM_setValue(CONFIG.BACKEND_KEY, 'upstream');
                 return true;
             }
-            GM_setValue(CONFIG.MUG_URL_KEY, url.trim());
-            GM_setValue(CONFIG.MUG_TOKEN_KEY, token.trim());
-            GM_setValue(CONFIG.BACKEND_KEY, 'mug');
+            GM_setValue(CONFIG.AHDB_URL_KEY, url.trim());
+            GM_setValue(CONFIG.AHDB_TOKEN_KEY, token.trim());
+            GM_setValue(CONFIG.BACKEND_KEY, 'ahdb');
             return true;
         },
         reconfigure() {
@@ -1270,18 +1285,18 @@
 
     function apiRequest(endpoint, method, body) {
         return new Promise((resolve, reject) => {
-            const mug = backend.isMug();
+            const ahdb = backend.isAhdb();
             // Upstream names its edge functions; ours names REST resources. One table, so an
             // unmapped endpoint fails loudly here rather than 404ing at the server.
-            const MUG_ROUTES = { 'search-auctions': '/api/auctions/search' };
-            if (mug && !MUG_ROUTES[endpoint]) {
-                reject(new Error(`no mug-bot route for "${endpoint}"`));
+            const AHDB_ROUTES = { 'search-auctions': '/api/auctions/search' };
+            if (ahdb && !AHDB_ROUTES[endpoint]) {
+                reject(new Error(`no AH DB route for "${endpoint}"`));
                 return;
             }
-            const url = mug
-                ? `${backend.url()}${MUG_ROUTES[endpoint]}`
+            const url = ahdb
+                ? `${backend.url()}${AHDB_ROUTES[endpoint]}`
                 : `${CONFIG.SUPABASE_URL}/functions/v1/${endpoint}`;
-            const token = mug ? backend.token() : CONFIG.SUPABASE_ANON_KEY;
+            const token = ahdb ? backend.token() : CONFIG.SUPABASE_ANON_KEY;
 
             GM_xmlhttpRequest({
                 method: method,
@@ -1300,15 +1315,15 @@
                         if (response.status >= 200 && response.status < 300) {
                             resolve(data);
                         } else {
-                            reject(new Error(describeApiError(response.status, data, mug)));
+                            reject(new Error(describeApiError(response.status, data, ahdb)));
                         }
                     } catch (e) {
-                        reject(new Error(mug && response.status === 0
+                        reject(new Error(ahdb && response.status === 0
                             ? `cannot reach ${backend.label()}`
                             : 'Parse error'));
                     }
                 },
-                onerror: () => reject(new Error(mug
+                onerror: () => reject(new Error(ahdb
                     ? `cannot reach ${backend.label()} — is the server up?`
                     : 'Network error')),
                 ontimeout: () => reject(new Error('Request timeout'))
@@ -1318,12 +1333,12 @@
 
     /** The failure modes worth naming rather than showing as a bare "API error": all three are
      *  fixed by the operator, and none of them are visible from the message the server sends. */
-    function describeApiError(status, data, mug) {
-        if (mug && status === 401) {
+    function describeApiError(status, data, ahdb) {
+        if (ahdb && status === 401) {
             return 'token rejected — reconfigure from the userscript menu';
         }
-        if (mug && status === 503) {
-            return 'ledger API is disabled (MUG_API_TOKEN unset on the server)';
+        if (ahdb && status === 503) {
+            return 'AH DB API is disabled (MUG_API_TOKEN unset in the server\'s .env)';
         }
         if (status === 429) {
             return 'rate limited — wait a moment';
@@ -1528,7 +1543,7 @@
             // Check client-side cache first. Keyed by BACKEND as well as query — the two hold
             // different histories, so a cache hit from the other one is a wrong answer, not a
             // stale one.
-            const cacheKey = JSON.stringify([backend.isMug() ? backend.url() : 'upstream', body]);
+            const cacheKey = JSON.stringify([backend.isAhdb() ? backend.url() : 'upstream', body]);
             const cached = searchCache.get(cacheKey);
             if (cached) {
                 state.results = cached.auctions || [];
@@ -1922,15 +1937,15 @@
     /** Switching is explicit and one click from the results it produced, so "these numbers came
      *  from the wrong place" is noticeable and fixable in the same breath. */
     function chooseBackend() {
-        const onMug = backend.isMug();
-        const msg = onMug
-            ? `Results are coming from your mug-bot ledger at ${backend.url()}.\n\n` +
+        const onAhdb = backend.isAhdb();
+        const msg = onAhdb
+            ? `Results are coming from your AH DB at ${backend.url()}.\n\n` +
               'OK — reconfigure the address/token\nCancel — switch to the original public backend'
             : 'Results are coming from the original public backend.\n\n' +
-              'OK — point this script at a mug-bot ledger\nCancel — stay on the public backend';
+              'OK — point this script at your AH DB\nCancel — stay on the public backend';
         if (confirm(msg)) {
             backend.reconfigure();
-        } else if (onMug) {
+        } else if (onAhdb) {
             backend.useUpstream();
         }
     }
@@ -2929,11 +2944,11 @@
 
     function registerMenuCommands() {
         if (typeof GM_registerMenuCommand !== 'function') return;
-        GM_registerMenuCommand('Configure mug-bot backend', () => backend.reconfigure());
+        GM_registerMenuCommand('Configure AH DB backend', () => backend.reconfigure());
         GM_registerMenuCommand('Use the original public backend', () => backend.useUpstream());
         GM_registerMenuCommand('Show current backend', () => {
-            alert(backend.isMug()
-                ? `Searching the mug-bot ledger at ${backend.url()}`
+            alert(backend.isAhdb()
+                ? `Searching the AH DB at ${backend.url()}`
                 : 'Searching the original public backend');
         });
     }
