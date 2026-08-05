@@ -100,6 +100,23 @@ def _relative(ts: Optional[int]) -> str:
     return f"<t:{int(ts)}:R>" if ts else "?"
 
 
+def _auction_age(match: dict) -> str:
+    """" 3 days ago" / " on <date>" for an AH win — always something, never blank.
+
+    Prefers `won_at` (a real timestamp, so Discord renders it live and it stays correct as the
+    embed ages) over the stored `age_days`, which froze at the moment the uid was matched.
+    """
+    won_at = match.get("won_at")
+    if won_at:
+        return f" {_relative(won_at)}"
+    age = match.get("age_days")
+    if age is None:
+        return ""
+    if age < 1:
+        return " today"
+    return f" {age}d ago" if age < 60 else f" {age // 30}mo ago"
+
+
 def _online_dot(last_action_ts: Optional[int]) -> str:
     if not last_action_ts:
         return DOT_OFFLINE
@@ -215,9 +232,12 @@ def build_mug_alert_embed(event: Dict) -> discord.Embed:
     lines.append(f"Stats: **{fmt_compact(event['tbs'])}**" if event.get("tbs") is not None
                  else "Stats: *unknown*")
 
+    # Always emitted, even when unknown. A line that silently disappears reads as "nothing to
+    # report" rather than "we could not find out", and last action is one of the two things that
+    # decide whether a target is worth walking to.
     la = event.get("last_action_ts")
-    if la:
-        lines.append(f"Last action: {_relative(la)} {_status_dot(event)}")
+    lines.append(f"Last action: {_relative(la)} {_status_dot(event)}" if la
+                 else f"Last action: *unknown* {_status_dot(event)}")
 
     if hospitalize:
         fac = event.get("faction") or f"faction {event.get('faction_id')}"
@@ -234,17 +254,18 @@ def build_mug_alert_embed(event: Dict) -> discord.Embed:
     if event.get("attribution") == "auction":
         m = event.get("anon_match") or {}
         who = m.get("buyer_name") or "this player"
-        bits = []
-        if m.get("price"):
-            bits.append(f"${m['price']:,}")
-        if m.get("age_days") is not None:
-            age = m["age_days"]
-            bits.append("today" if age < 1 else f"{age}d ago" if age < 60 else f"{age // 30}mo ago")
-        detail = f" for {' '.join(bits)}" if bits else ""
+        price = f" for ${m['price']:,}" if m.get("price") else ""
+        # Age is recomputed from the win timestamp rather than read from `age_days`, which is the
+        # age at MATCH time. The two drift apart by however long the listing sat on the market, and
+        # the number on screen should be how old the evidence is now.
+        when = _auction_age(m)
+        # Confidence is never omitted. Dropping it when it is low or missing hides exactly the
+        # cases where you most need to know how much to trust the line.
         conf = m.get("confidence")
-        conf_txt = f" · ~{conf * 100:.0f}% likely correct" if conf else ""
+        conf_txt = (f" · ~{conf * 100:.0f}% likely correct" if conf
+                    else " · confidence unknown")
         lines.append(f"🕵️ **Anon match** — seller inferred from the auction house: "
-                     f"{who} won this item{detail}{conf_txt}")
+                     f"{who} won this item{price}{when}{conf_txt}")
 
     if event.get("faction"):
         lines.append(f"Faction: {event['faction']}")

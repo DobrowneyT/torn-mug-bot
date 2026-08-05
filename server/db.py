@@ -605,7 +605,12 @@ _FORWARD_COLS = {
                      # How we know who the seller is: NULL/'matcher' = the item-matcher captured
                      # them; 'auction' = INFERRED from an AH win. The alert has to be able to tell
                      # them apart, because the confidence is materially different.
-                     "attribution": "TEXT"},
+                     "attribution": "TEXT",
+                     # The AH evidence AS IT STOOD when the uid was attributed, as JSON. Kept here
+                     # rather than looked up at alert time because `anon_matches` is rebuilt whole
+                     # on every scrape: by the time the listing vanishes the row can be gone, and
+                     # the alert then has no price, date or confidence to show.
+                     "attribution_evidence": "TEXT"},
 }
 
 
@@ -929,18 +934,24 @@ async def get_tracked_uids_for_item(item_id) -> Dict[str, Dict]:
 
 
 async def upsert_tracked_gear(*, uid, item_id, item_name, price, seller_id, stats_json=None,
-                              attribution=None) -> None:
+                              attribution=None, attribution_evidence=None) -> None:
     now = _now()
     await _db.execute(
         """INSERT INTO tracked_gear(uid, item_id, item_name, price, seller_id, stats_json,
-                                    attribution, misses, seen, first_seen, last_seen)
-           VALUES (?,?,?,?,?,?,?,0,1,?,?)
+                                    attribution, attribution_evidence, misses, seen,
+                                    first_seen, last_seen)
+           VALUES (?,?,?,?,?,?,?,?,0,1,?,?)
            ON CONFLICT(uid) DO UPDATE SET misses=0, last_seen=excluded.last_seen,
                price=excluded.price, seen=COALESCE(tracked_gear.seen, 1) + 1,
                -- A later DIRECT capture must overwrite an earlier inference, never the reverse:
                -- COALESCE would pin the first answer, and the first answer is the weaker one.
-               seller_id=excluded.seller_id, attribution=excluded.attribution""",
-        (str(uid), item_id, item_name, price, seller_id, stats_json, attribution, now, now),
+               -- The evidence moves WITH the attribution: a capture supersedes the inference, so
+               -- leaving the old AH evidence behind would have the embed cite reasoning that is no
+               -- longer why we believe it.
+               seller_id=excluded.seller_id, attribution=excluded.attribution,
+               attribution_evidence=excluded.attribution_evidence""",
+        (str(uid), item_id, item_name, price, seller_id, stats_json, attribution,
+         attribution_evidence, now, now),
     )
     await _commit()
 

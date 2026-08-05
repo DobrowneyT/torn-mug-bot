@@ -318,6 +318,10 @@ async def reconcile_gear(bot, item_id, current: dict, item_label=None, complete:
                 price=info["price"], seller_id=attrib.seller_id,
                 stats_json=tracked[uid].get("stats_json"),
                 attribution=attrib.source,
+                # An upgrade carries no evidence of its own (a capture is an observation, not an
+                # inference), so keep what is stored only while the attribution is unchanged.
+                attribution_evidence=(tracked[uid].get("attribution_evidence")
+                                      if attrib.source == tracked[uid].get("attribution") else None),
             )
             stats_n["tracked"] += 1
             continue
@@ -331,6 +335,7 @@ async def reconcile_gear(bot, item_id, current: dict, item_label=None, complete:
             await db.upsert_tracked_gear(
                 uid=uid, item_id=item_id, item_name=attrib.item_name, price=info["price"],
                 seller_id=attrib.seller_id, attribution=attrib.source,
+                attribution_evidence=json.dumps(attrib.evidence) if attrib.evidence else None,
                 stats_json=json.dumps(info.get("stats")) if info.get("stats") else None,
             )
             await db.remove_unmatched_gear(uid)
@@ -391,11 +396,18 @@ async def reconcile_gear(bot, item_id, current: dict, item_label=None, complete:
                     stats = json.loads(row["stats_json"])
                 except (ValueError, TypeError):
                     stats = None
+            evidence = None
+            if row.get("attribution_evidence"):
+                try:
+                    evidence = json.loads(row["attribution_evidence"])
+                except (ValueError, TypeError):
+                    log.warning("uid=%s: unreadable attribution evidence — the alert will fall "
+                                "back to a live lookup", uid)
             _spawn_sale(detection.on_sale(
                 seller_id=row["seller_id"], item_id=item_id,
                 item_name=row.get("item_name") or item_label, qty=1, unit_price=row.get("price"),
                 listing_id=f"uid:{uid}", bot=bot, stats=stats,
-                attribution=row.get("attribution"), uid=uid,
+                attribution=row.get("attribution"), uid=uid, evidence=evidence,
             ))
 
     await db.prune_unmatched_gear(item_id, set(current.keys()))

@@ -39,18 +39,24 @@ def _win(auction_id, uid, buyer_id, ended_at, price=9_000_000):
     }
 
 
-def _setup(monkeypatch, tmp_path, name):
+def _setup(monkeypatch, tmp_path, name, last_action_ago=DAY):
+    """`last_action_ago=None` simulates a profile lookup that gave us nothing — which is now a
+    material state, not a cosmetic one: without a last action the de-list guard cannot run."""
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / f"{name}_main.db"))
 
     async def fake_enrich(user_id, client, force=False):
-        return await db.get_seller(user_id)
+        row = dict(await db.get_seller(user_id) or {})
+        row.setdefault("name", f"Player{user_id}")
+        row["last_action_ts"] = (None if last_action_ago is None
+                                 else int(time.time()) - last_action_ago)
+        return row
 
     monkeypatch.setattr(detection, "enrich_seller", fake_enrich)
     monkeypatch.setattr(detection, "enrich_clothing", fake_enrich)
 
 
-def _run(scenario, tmp_path, monkeypatch, name):
-    _setup(monkeypatch, tmp_path, name)
+def _run(scenario, tmp_path, monkeypatch, name, last_action_ago=DAY):
+    _setup(monkeypatch, tmp_path, name, last_action_ago)
 
     async def wrapper():
         await ah_db.init_db(str(tmp_path / f"{name}_ah.db"))
@@ -119,9 +125,12 @@ def test_the_embed_states_the_inference_and_its_evidence(tmp_path, monkeypatch):
         })
         text = embed.description or ""
         assert "Anon match" in text
-        assert "Buyer4242" in text and "3d ago" in text
+        assert "Buyer4242" in text
         assert "$9,000,000" in text
         assert "88%" in text, "the measured confidence must be shown, not just asserted"
+        # A live Discord timestamp rather than a baked "3d ago": the embed stays in the channel and
+        # its own claim about how old the evidence is has to age with it.
+        assert f"<t:{match['won_at']}:R>" in text
 
     _run(scenario, tmp_path, monkeypatch, "embed")
 
@@ -237,3 +246,157 @@ def test_a_normal_capture_is_unaffected(tmp_path, monkeypatch):
         assert bot.alerts[0]["silent"] is False, "a captured seller must still ping"
 
     _run(scenario, tmp_path, monkeypatch, "normal")
+
+
+# --------------------------------- the evidence outlives the lookup ---------------------
+
+def test_the_alert_still_has_its_evidence_after_the_match_table_is_rebuilt(tmp_path, monkeypatch):
+    """The bug behind "seller inferred from the auction house: this player won this item".
+
+    `anon_matches` is recomputed WHOLESALE by every scrape, and a uid drops out of the candidate
+    set as soon as it is attributed. The sale fires whenever the listing vanishes, which is hours
+    later — by then the row the alert wanted to read is gone, and the embed degraded to a sentence
+    with no buyer, no price, no date and no confidence. Precisely the cases where you most need to
+    judge the claim.
+
+    Evidence is therefore captured at attribution time. Only the ping POLICY is re-read.
+    """
+    async def scenario():
+        from server.ah_scraper import run_match
+
+        bot = FakeBot()
+        # The real sequence, not a simulation of it. An UNMATCHED uid (not one stashed as
+        # anonymous) is the case that bites: reconcile removes it from unmatched_gear the moment it
+        # is attributed, so the very next match pass no longer counts it as a candidate.
+        await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
+        await ah_db.record_auctions([_win(1, UID, 4242, int(time.time()) - 3 * DAY)])
+        await run_match()
+        assert await db.get_anon_match(UID), "precondition: the uid resolves at attribution time"
+
+        await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
+        assert (await db.get_tracked_uids_for_item(ITEM))[UID]["attribution"] == "auction"
+
+        await run_match()
+        assert await db.get_anon_match(UID) is None, "precondition: the lookup no longer resolves"
+
+        await api_poller.reconcile_gear(bot, ITEM, {}, item_label="ArmaLite M-15A4")
+        await api_poller.drain_sale_tasks()
+
+        assert len(bot.alerts) == 1
+        m = bot.alerts[0]["anon_match"]
+        assert m, "the alert lost the evidence for its own claim"
+        assert m["buyer_name"] == "Buyer4242"
+        assert m["price"] == 9_000_000
+        assert m["confidence"] and m["won_at"]
+
+        text = formatter.build_mug_alert_embed(bot.alerts[0]).description or ""
+        assert "this player won this item" not in text, "degraded to the evidence-free sentence"
+        assert "Buyer4242" in text and "$9,000,000" in text and "% likely correct" in text
+
+    _run(scenario, tmp_path, monkeypatch, "evidence")
+
+
+def test_a_capture_that_supersedes_an_inference_drops_the_stale_evidence(tmp_path, monkeypatch):
+    """Once the item-matcher names the seller, the AH win is no longer why we believe it. Leaving
+    the evidence behind would have the embed cite reasoning it is not using."""
+    async def scenario():
+        await _anon_uid_won_at_auction(buyer_id=4242)
+        bot = FakeBot()
+        await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
+        assert (await db.get_tracked_uids_for_item(ITEM))[UID]["attribution_evidence"]
+
+        await db.upsert_listing(listing_id="L1", item_id=ITEM, item_name="ArmaLite M-15A4",
+                                seller_id=3333, price=50_000_000, available=1, anonymous=False,
+                                is_gear=True, armoury_uid=UID)
+        await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
+
+        row = (await db.get_tracked_uids_for_item(ITEM))[UID]
+        assert row["attribution"] == "matcher" and row["seller_id"] == 3333
+        assert row["attribution_evidence"] is None, "kept AH evidence for a captured seller"
+
+    _run(scenario, tmp_path, monkeypatch, "supersede")
+
+
+# --------------------------------- the profile is mandatory -----------------------------
+
+def test_an_inferred_seller_active_right_now_is_not_posted_at_all(tmp_path, monkeypatch):
+    """A recent last action is not a caveat on an inferred alert, it is a competing explanation for
+    the whole thing — and a likelier one. We never saw this player list anything; the item vanishing
+    while they were active is far better explained by them pulling their own listing.
+
+    Note the mode: `ping` would normally post this WITH a de-list tag. For an inference it does not
+    get a vote."""
+    async def scenario():
+        await db.set_config("delist_mode", "ping")
+        await _anon_uid_won_at_auction()
+        bot = FakeBot()
+        await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
+        await api_poller.reconcile_gear(bot, ITEM, {}, item_label="ArmaLite M-15A4")
+        await api_poller.drain_sale_tasks()
+        assert bot.alerts == [], "posted an inference that was almost certainly a de-list"
+
+    _run(scenario, tmp_path, monkeypatch, "delist", last_action_ago=30)
+
+
+def test_a_captured_seller_active_right_now_is_still_posted_and_tagged(tmp_path, monkeypatch):
+    """The other side of it. For a seller we OBSERVED listing the item, a recent action is a
+    caveat worth showing rather than grounds to bin the alert — that judgement stays with
+    /delist."""
+    async def scenario():
+        await db.set_config("delist_mode", "ping")
+        await db.upsert_listing(listing_id="L1", item_id=ITEM, item_name="ArmaLite M-15A4",
+                                seller_id=3333, price=50_000_000, available=1, anonymous=False,
+                                is_gear=True, armoury_uid=UID)
+        bot = FakeBot()
+        await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
+        await api_poller.reconcile_gear(bot, ITEM, {}, item_label="ArmaLite M-15A4")
+        await api_poller.drain_sale_tasks()
+        assert len(bot.alerts) == 1
+        assert bot.alerts[0]["delist_active_secs"] is not None, "the de-list tag was lost"
+
+    _run(scenario, tmp_path, monkeypatch, "delist_capture", last_action_ago=30)
+
+
+def test_an_inferred_seller_with_no_profile_is_not_posted(tmp_path, monkeypatch):
+    """Without a last action the de-list guard cannot run at all. Stacking that unknown on top of
+    an inference is not an alert, it is a guess — and it is the case that produced embeds with a
+    bare user id and no last-action line."""
+    async def scenario():
+        await _anon_uid_won_at_auction()
+        bot = FakeBot()
+        await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
+        await api_poller.reconcile_gear(bot, ITEM, {}, item_label="ArmaLite M-15A4")
+        await api_poller.drain_sale_tasks()
+        assert bot.alerts == []
+
+    _run(scenario, tmp_path, monkeypatch, "noprofile", last_action_ago=None)
+
+
+def test_the_embed_never_shows_a_bare_user_id_for_an_inferred_seller(tmp_path, monkeypatch):
+    """You cannot recognise a target from a number. The AH win names the same player, so it is the
+    fallback when the profile did not give us a name."""
+    async def scenario():
+        await _anon_uid_won_at_auction(buyer_id=4242)
+        match = await db.get_anon_match(UID)
+        event = detection._build_event(
+            4242, {"last_action_ts": int(time.time()) - DAY}, {"total": 5, "count": 1, "sales": []},
+            type("R", (), {"mug_min": 1, "mug_max": 2})(),
+            attribution="auction", anon_match=match)
+        assert event["seller_name"] == "Buyer4242"
+
+        text = formatter.build_mug_alert_embed(event).description or ""
+        assert "Owner: **4242**" not in text
+
+    _run(scenario, tmp_path, monkeypatch, "name")
+
+
+def test_the_last_action_line_is_always_present(tmp_path, monkeypatch):
+    """A line that vanishes reads as "nothing to report" rather than "we could not find out"."""
+    async def scenario():
+        event = detection._build_event(
+            4242, {}, {"total": 5, "count": 1, "sales": []},
+            type("R", (), {"mug_min": 1, "mug_max": 2})())
+        text = formatter.build_mug_alert_embed(event).description or ""
+        assert "Last action:" in text and "*unknown*" in text
+
+    _run(scenario, tmp_path, monkeypatch, "lastaction")
