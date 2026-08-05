@@ -781,6 +781,36 @@ async def anon_match_summary() -> Dict:
     return out
 
 
+async def latest_gear_sale(seller_id) -> Optional[Dict]:
+    """The most recent gear sale for a seller — i.e. the one an alert would have been about."""
+    cur = await _db.execute(
+        """SELECT id, item_name, total_value, sold_at, attribution, confidence
+             FROM sales WHERE seller_id=? AND listing_id LIKE 'uid:%'
+            ORDER BY sold_at DESC LIMIT 1""", (seller_id,))
+    row = await cur.fetchone()
+    return dict(row) if row else None
+
+
+async def record_mug_feedback(*, seller_id, amount, sale=None, expected=None, note=None) -> int:
+    """Store what a mug actually returned. The alert's own numbers are frozen alongside it: a later
+    /mugmin or protection-hours change must not be able to rewrite what we predicted at the time."""
+    cur = await _db.execute(
+        """INSERT INTO mug_feedback(sale_id, seller_id, amount, expected_min, expected_max,
+                                    attribution, confidence, note, noted_at)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        ((sale or {}).get("id"), int(seller_id), int(amount),
+         (expected or {}).get("min"), (expected or {}).get("max"),
+         (sale or {}).get("attribution"), (sale or {}).get("confidence"), note, _now()),
+    )
+    await _commit()
+    return cur.lastrowid
+
+
+async def mug_feedback_rows() -> List[Dict]:
+    cur = await _db.execute("SELECT * FROM mug_feedback ORDER BY noted_at")
+    return [dict(r) for r in await cur.fetchall()]
+
+
 async def alerts_by_attribution() -> List[Dict]:
     """Every gear sale we recorded, with how the seller was known and what we later learned.
 

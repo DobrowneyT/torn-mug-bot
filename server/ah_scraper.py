@@ -648,6 +648,8 @@ async def show_verdict() -> None:
     print(f"{'direct capture':<18}{len(captured):>8}{checkable:>11}{bad:>14}{acc:>10}"
           "   <- control")
 
+    await _print_mug_feedback(db)
+
     print()
     if unrecorded:
         print(f"{len(unrecorded):,} older sale(s) predate attribution being recorded and are")
@@ -668,6 +670,36 @@ async def show_verdict() -> None:
     print()
     print("  If the top band is not materially better than the bottom, the score is not earning its")
     print("  complexity and should be DELETED rather than tuned.")
+
+
+async def _print_mug_feedback(db) -> None:
+    """The human label stream, printed SEPARATELY and never folded into the table above.
+
+    The two are biased in opposite directions — this one is selected on alerts somebody chose to
+    act on, the passive one on uids that happen to reappear in a named listing — so averaging them
+    would produce a number that is neither, and hide both biases while doing it.
+    """
+    rows = await db.mug_feedback_rows()
+    if not rows:
+        return
+    inferred = [r for r in rows if r["attribution"] == "auction"]
+    if not inferred:
+        print()
+        print(f"{len(rows)} mug(s) reported via /mugged, none of them on an inferred seller yet.")
+        return
+
+    zero = [r for r in inferred if r["amount"] == 0]
+    low = [r for r in inferred if 0 < r["amount"] < (r["expected_min"] or 0)]
+    inrange = [r for r in inferred if r["amount"] >= (r["expected_min"] or 0) > 0]
+
+    print()
+    print(f"/mugged feedback on inferred sellers ({len(inferred)} reported)")
+    print(f"  returned $0            {len(zero):>4}   banked, or the match was wrong — mug "
+          f"protection is never total, so these are the only two explanations")
+    print(f"  below the prediction   {len(low):>4}   partly banked, or a weaker match")
+    print(f"  in the predicted range {len(inrange):>4}   the attribution looks right")
+    print("  Kept separate from the table above on purpose: this sample is selected on alerts you")
+    print("  chose to act on, that one on uids that happen to reappear in a named listing.")
 
 
 async def show_calibration() -> None:
