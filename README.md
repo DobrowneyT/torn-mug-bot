@@ -104,13 +104,31 @@ hospital**, **🔵 offline/idle**.
 The `status-tracker` panel shows captured-seller counts + the watch list (✅ enabled / ⬜ disabled,
 sellers captured, listings tracked, last poll).
 
-## WebSocket token
+## Userscript settings (server address + WS token)
 
-The userscript connects to Torn's Centrifugo WebSocket with a JWT whose payload is
-`{"sub":"<your Torn user id>"}` — it's **per account, not per page**, and is reused for every
-channel subscription. The committed value belongs to the original author; set `wsToken` in
-`market-tracker.user.js` to **your own** token. (Follow-up: pull it live from the page instead
-of hardcoding — see the plan.)
+Neither is in the file any more. Both live in browser storage, because a per-install value baked
+into shared source is how `item-matcher` ended up pointing at a retired box and posting gear
+captures into the void for weeks — silently, since a network error is one console line.
+
+| setting | stored in | why there |
+|---|---|---|
+| mug-bot server address | `localStorage['mugBotServerUrl']` | **shared** — both userscripts read it, so moving the box is one change, not two files |
+| Torn WebSocket token | GM storage (`market-tracker` only) | it authenticates as you; localStorage is readable by scripts Torn itself loads |
+
+Set either from the userscript manager's menu (*Set mug-bot server URL* / *Set Torn WebSocket
+token*), or by clicking the address shown in the panel. Leave the address blank to fall back to
+the tracked default.
+
+Both scripts now **say when they are not working**, which is the actual fix:
+
+```
+⚠ NO WS TOKEN                    market-tracker: subscribed to nothing, so tracking nothing
+⚠ 51.68.212.98:3001 UNREACHABLE  the server is not answering — nothing is being captured
+```
+
+The WebSocket token is a JWT whose payload is `{"sub":"<your Torn user id>"}` — **per account, not
+per page**, reused for every channel subscription. Read yours off the item market page's WebSocket
+handshake in devtools. (Follow-up: pull it live from the page instead of storing it at all.)
 
 ## Deploy
 
@@ -698,7 +716,9 @@ sqlite3 /var/lib/mug-bot/mug_bot.db "PRAGMA integrity_check;"          # expect:
 sudo systemctl start mug-bot
 ```
 
-Finally, repoint the userscripts at the new address (see `userscripts/`).
+Finally, repoint the userscripts: in the browser, *Set mug-bot server URL* from the userscript
+menu (one setting, shared by both). No source edit — which matters, because editing a tracked file
+on the box leaves the working tree dirty and `update.sh` then refuses to deploy.
 
 > Storage tip (Raspberry Pi): put the database on an **SSD**, not the SD card. The bot writes
 > constantly, and SD cards are slow at random writes and wear out.
