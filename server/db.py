@@ -191,6 +191,7 @@ async def init_db() -> aiosqlite.Connection:
     with open(SCHEMA_PATH) as f:
         await _db.executescript(f.read())
     await _ensure_columns()
+    await _drop_inferences_that_skipped_the_matcher()
     for key, val in _CONFIG_DEFAULTS.items():
         await _db.execute(
             "INSERT OR IGNORE INTO config(key, value) VALUES (?, ?)", (key, json.dumps(val))
@@ -612,6 +613,32 @@ _FORWARD_COLS = {
                      # the alert then has no price, date or confidence to show.
                      "attribution_evidence": "TEXT"},
 }
+
+
+async def _drop_inferences_that_skipped_the_matcher() -> int:
+    """Clear gear attributed from an auction win that the item-matcher never looked at.
+
+    The AH inference used to accept `unmatched_gear` as well as the anon cache, which inverted the
+    pipeline: a uid queued for a human to capture definitively got guessed at instead, and
+    attributing it removed it from the queue — so the human was never asked, and the guess became
+    permanent. 368 such rows existed on the live database when this landed.
+
+    They are deleted rather than corrected because there is nothing to correct them to: the right
+    answer is "we do not know yet, ask the item-matcher". The next poll re-adds each uid to
+    `unmatched_gear`, which is where it should have been all along. Self-healing, and idempotent —
+    once the rule is in force no new rows can qualify.
+    """
+    cur = await _db.execute(
+        """DELETE FROM tracked_gear
+            WHERE attribution = 'auction'
+              AND uid NOT IN (SELECT uid FROM anon_uids)"""
+    )
+    await _commit()
+    removed = cur.rowcount or 0
+    if removed:
+        log.warning("dropped %d gear attribution(s) inferred for uids the item-matcher never saw "
+                    "— they return to the capture queue on the next poll", removed)
+    return removed
 
 
 async def _ensure_columns() -> None:

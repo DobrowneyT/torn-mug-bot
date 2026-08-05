@@ -90,19 +90,36 @@ def from_capture(uid_map_row: Dict[str, Any]) -> Attribution:
     )
 
 
-async def resolve(uid, uid_map: Dict[str, Any], *, item_label: Optional[str] = None) -> Attribution:
+async def resolve(uid, uid_map: Dict[str, Any], *, item_label: Optional[str] = None,
+                  anonymous: bool = False) -> Attribution:
     """Who owns this uid, consulting every source in precedence order.
 
     Gear is attributed by **exact uid** only. There is deliberately no price fallback: matching on
     price alone pins one player's weapon onto another who listed at the same round number (the
     $300M Swiss Army Knife mis-match). An uncaptured uid staying unmatched is the correct outcome.
+
+    `anonymous` is a HARD GATE on the auction-house inference, not a hint. The pipeline is:
+
+        item market API  ->  uid, no seller
+        item-matcher     ->  the seller, definitively — or "this listing is anonymous"
+        anon cache       ->  the uids the matcher could not name
+        auction house    ->  a guess, for those and ONLY those
+
+    A uid that has not been through the matcher yet is not a dead end, it is a QUEUE ENTRY. Guessing
+    at it is wrong twice over: a ~77% inference pre-empts an answer that would have been certain,
+    and — because attributing a uid removes it from `unmatched_gear` — the guess deletes the very
+    queue entry that would have produced the certain answer. The inference cannibalises the
+    pipeline that grounds it.
     """
     if uid in uid_map:
         return from_capture(uid_map[uid])
 
-    # No direct capture. Before writing this off as an anonymous dead end, ask the auction house:
-    # if this uid was won at auction and nothing since says otherwise, the person listing it
-    # anonymously is the winner.
+    if not anonymous:
+        return replace(UNMATCHED, reason="not yet seen by the item-matcher — capture it first")
+
+    # The matcher has seen this listing and could not name the seller. NOW the auction house is the
+    # best evidence available: if this uid was won at auction and nothing since says otherwise, the
+    # person listing it anonymously is the winner.
     match = await db.get_anon_match(uid)
     decision = await decide_anon(match)
     if not decision["use"]:

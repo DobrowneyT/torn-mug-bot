@@ -326,7 +326,10 @@ async def reconcile_gear(bot, item_id, current: dict, item_label=None, complete:
             stats_n["tracked"] += 1
             continue
 
-        attrib = await attribution.resolve(uid, uid_map, item_label=item_label)
+        # `anonymous=` gates the AH inference: only a uid the item-matcher has already looked at
+        # and reported as anonymous is eligible. Anything else belongs in the capture queue.
+        attrib = await attribution.resolve(uid, uid_map, item_label=item_label,
+                                           anonymous=uid in anon)
         if config.DEBUG_GEAR and attrib.source == attribution.AUCTION:
             log.info("  uid=%s ANON-MATCH -> seller=%s (%s, %s)",
                      uid, attrib.seller_id, attrib.seller_name, attrib.reason)

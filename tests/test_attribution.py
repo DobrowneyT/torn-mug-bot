@@ -52,7 +52,7 @@ def test_a_direct_capture_wins_and_does_not_even_ask_the_auction_house(no_ah):
 
 
 def test_an_auction_win_is_used_when_nothing_direct_exists(ah):
-    attrib = asyncio.run(attribution.resolve("u1", {}, item_label="Sai"))
+    attrib = asyncio.run(attribution.resolve("u1", {}, item_label="Sai", anonymous=True))
     assert attrib.seller_id == 222 and attrib.source == AUCTION
     assert attrib.confidence == 0.95 and attrib.item_name == "Sai"
 
@@ -60,7 +60,7 @@ def test_an_auction_win_is_used_when_nothing_direct_exists(ah):
 def test_a_uid_no_source_can_speak_for_is_unmatched(ah):
     """Deliberately no price fallback. Matching on price alone pins one player's weapon onto
     another who listed at the same round number — the $300M Swiss Army Knife mis-match."""
-    attrib = asyncio.run(attribution.resolve("unknown-uid", {}))
+    attrib = asyncio.run(attribution.resolve("unknown-uid", {}, anonymous=True))
     assert attrib.matched is False and attrib.seller_id is None and attrib.source is None
 
 
@@ -76,7 +76,7 @@ def test_a_weak_auction_win_is_used_but_silenced(monkeypatch):
     monkeypatch.setattr(db, "get_anon_match", get_anon_match)
     monkeypatch.setattr(db, "get_config", get_config)
 
-    attrib = asyncio.run(attribution.resolve("u1", {}))
+    attrib = asyncio.run(attribution.resolve("u1", {}, anonymous=True))
     assert attrib.matched is True and attrib.silent is True
 
 
@@ -145,3 +145,18 @@ def test_the_alert_path_re_reads_rather_than_trusting_the_poll(ah, monkeypatch):
 
 def test_a_missing_uid_is_not_an_ah_lookup(no_ah):
     assert asyncio.run(attribution.silence_for(AUCTION, None)) == (None, False)
+
+
+def test_a_uid_the_matcher_has_not_seen_is_not_guessed_at(no_ah):
+    """The auction house is not consulted at all — not weighed and rejected, not consulted. A uid
+    awaiting capture is a queue entry for a human, and an inference would both pre-empt a certain
+    answer and (via remove_unmatched_gear) delete the queue entry that produces it."""
+    attrib = asyncio.run(attribution.resolve("u1", {}, anonymous=False))
+    assert attrib.matched is False
+    assert "item-matcher" in attrib.reason
+
+
+def test_a_direct_capture_still_wins_for_a_uid_the_matcher_called_anonymous(no_ah):
+    """The gate opens the AH path; it does not reorder precedence above it."""
+    attrib = asyncio.run(attribution.resolve("u1", {"u1": CAPTURE}, anonymous=True))
+    assert attrib.source == MATCHER and attrib.seller_id == 111

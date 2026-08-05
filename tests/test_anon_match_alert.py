@@ -250,48 +250,49 @@ def test_a_normal_capture_is_unaffected(tmp_path, monkeypatch):
 
 # --------------------------------- the evidence outlives the lookup ---------------------
 
-def test_the_alert_still_has_its_evidence_after_the_match_table_is_rebuilt(tmp_path, monkeypatch):
-    """The bug behind "seller inferred from the auction house: this player won this item".
+def test_the_alert_cites_the_evidence_it_acted_on_not_a_later_one(tmp_path, monkeypatch):
+    """`anon_matches` is recomputed WHOLESALE by every scrape, and the sale fires whenever the
+    listing vanishes — hours later. Reading the table at alert time therefore describes whatever
+    the LAST scrape concluded, which need not be what we attributed on.
 
-    `anon_matches` is recomputed WHOLESALE by every scrape, and a uid drops out of the candidate
-    set as soon as it is attributed. The sale fires whenever the listing vanishes, which is hours
-    later — by then the row the alert wanted to read is gone, and the embed degraded to a sentence
-    with no buyer, no price, no date and no confidence. Precisely the cases where you most need to
-    judge the claim.
+    The concrete way that goes wrong: the uid is auctioned again, to somebody else, while the
+    listing we are tracking is still up. `seller_id` stays the buyer we attributed, because a mere
+    AH row does not override a live attribution — but the embed would quote the NEW buyer's name
+    and price as the reason. An alert that names one player and justifies itself with another's
+    purchase is worse than no provenance at all.
 
-    Evidence is therefore captured at attribution time. Only the ping POLICY is re-read.
+    So the evidence is captured at attribution time and travels with the tracked uid. Only the ping
+    POLICY (mode, threshold) is re-read.
     """
     async def scenario():
         from server.ah_scraper import run_match
 
+        await _anon_uid_won_at_auction(buyer_id=4242, age_days=3)
         bot = FakeBot()
-        # The real sequence, not a simulation of it. An UNMATCHED uid (not one stashed as
-        # anonymous) is the case that bites: reconcile removes it from unmatched_gear the moment it
-        # is attributed, so the very next match pass no longer counts it as a candidate.
         await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
-        await ah_db.record_auctions([_win(1, UID, 4242, int(time.time()) - 3 * DAY)])
-        await run_match()
-        assert await db.get_anon_match(UID), "precondition: the uid resolves at attribution time"
+        assert (await db.get_tracked_uids_for_item(ITEM))[UID]["seller_id"] == 4242
 
-        await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
-        assert (await db.get_tracked_uids_for_item(ITEM))[UID]["attribution"] == "auction"
-
+        # ...the same uid changes hands at auction again while our listing is still up.
+        await ah_db.record_auctions(
+            [_win(2, UID, 9999, int(time.time()) - 1 * DAY, price=1_234_567)])
         await run_match()
-        assert await db.get_anon_match(UID) is None, "precondition: the lookup no longer resolves"
+        assert (await db.get_anon_match(UID))["buyer_id"] == 9999, "precondition: the table moved on"
 
         await api_poller.reconcile_gear(bot, ITEM, {}, item_label="ArmaLite M-15A4")
         await api_poller.drain_sale_tasks()
 
         assert len(bot.alerts) == 1
-        m = bot.alerts[0]["anon_match"]
+        event = bot.alerts[0]
+        m = event["anon_match"]
         assert m, "the alert lost the evidence for its own claim"
-        assert m["buyer_name"] == "Buyer4242"
-        assert m["price"] == 9_000_000
-        assert m["confidence"] and m["won_at"]
+        assert m["buyer_id"] == 4242 and m["buyer_name"] == "Buyer4242"
+        assert m["price"] == 9_000_000, "quoted a purchase the attributed player never made"
+        assert m["buyer_id"] == event["seller_id"], "the embed names one player and cites another"
 
-        text = formatter.build_mug_alert_embed(bot.alerts[0]).description or ""
+        text = formatter.build_mug_alert_embed(event).description or ""
         assert "this player won this item" not in text, "degraded to the evidence-free sentence"
         assert "Buyer4242" in text and "$9,000,000" in text and "% likely correct" in text
+        assert "1,234,567" not in text
 
     _run(scenario, tmp_path, monkeypatch, "evidence")
 
@@ -458,3 +459,33 @@ def test_an_inferred_seller_we_have_never_captured_still_gets_enriched(tmp_path,
 
 async def _none():
     return None
+
+
+def test_reconcile_ignores_a_stale_inference_for_a_uid_the_matcher_never_saw(tmp_path, monkeypatch):
+    """Belt and braces, and not hypothetical: 14 such rows existed on the live database when the
+    pipeline order was fixed, written before `run_match` was restricted to the anon cache.
+
+    The scraper gate stops NEW ones being created; this stops an OLD one being acted on. Two gates
+    for one rule is deliberate — the poller must not depend on another component's table being
+    clean, because the failure is silent and blames a named player.
+    """
+    async def scenario():
+        now = int(time.time())
+        # A row exactly as the old rule would have left it: inferred, but the uid is not anonymous
+        # — nobody has ever confirmed this listing hides its seller.
+        await ah_db.record_auctions([_win(1, UID, 4242, now - 2 * DAY)])
+        await db.replace_anon_matches([{
+            "uid": UID, "buyer_id": 4242, "buyer_name": "Buyer4242", "auction_id": 1,
+            "price": 9_000_000, "won_at": now - 2 * DAY, "age_days": 2, "confidence": 0.88,
+        }], {UID})
+        assert await db.get_anon_match(UID) is not None
+
+        bot = FakeBot()
+        await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
+
+        assert UID not in await db.get_tracked_uids_for_item(ITEM), \
+            "acted on an inference for a uid the item-matcher has never seen"
+        assert await db._scalar1(f"SELECT COUNT(*) FROM unmatched_gear WHERE uid='{UID}'") == 1, \
+            "it should be queued for capture instead"
+
+    _run(scenario, tmp_path, monkeypatch, "stale_inference")
