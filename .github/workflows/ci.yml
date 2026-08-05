@@ -65,6 +65,11 @@ jobs:
             node --check "$f"
           done
 
+      # Both scripts carry their own copy of the address resolver. #15 was about them drifting
+      # apart unnoticed, so the agreement is checked rather than assumed.
+      - name: Userscripts agree on the server address
+        run: node userscripts/check-server-url.js
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:

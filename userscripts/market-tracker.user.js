@@ -1,12 +1,16 @@
 // ==UserScript==
 // @name         Market Tracker for Mug Bot
-// @version      5.3
+// @version      5.4
 // @description  Track market updates and forward to mug bot server
 // @author       MonChoon
 // @match        https://www.torn.com/page.php?sid=ItemMarket*
 // @run-at       document-end
 // @icon         https://www.google.com/s2/favicons?sz=64&domain/torn.com
 // @grant        GM.xmlHttpRequest
+// @grant        GM.registerMenuCommand
+// @grant        GM.getValue
+// @grant        GM.setValue
+// @connect      51.68.212.98
 // @require      https://cdn.jsdelivr.net/npm/centrifuge@6.2.5/dist/centrifuge.min.js
 // ==/UserScript==
 
@@ -15,8 +19,69 @@
 
     console.log('[MARKET TRACKER] Market Tracker for Mug Bot running');
 
-    // === Mug bot ingest server (standalone box) ===
-    const SERVER_URL = 'http://51.68.212.98:3001';
+    // === Mug bot ingest server ===
+    // The address is a SETTING, not a constant. Two reasons, both learned the hard way:
+    //
+    //   1. Moving the box used to mean editing tracked source, which leaves an uncommitted diff in
+    //      the working tree on the VPS — exactly the state that makes update.sh refuse to deploy.
+    //   2. Because it was a source edit rather than a setting, this script and item-matcher drifted
+    //      onto DIFFERENT boxes without anything noticing. Gear captures went into the void for
+    //      weeks: the script logs one console line on a network error and carries on.
+    //
+    // Stored in localStorage rather than GM storage so BOTH userscripts read the same value — they
+    // share an origin (www.torn.com) but not GM storage. Not a secret: it is a public address, and
+    // nothing sensitive is sent to it. The tracked constant below is only the fallback for a fresh
+    // install; see the status pill in the page header for what is actually in use.
+    const SERVER_URL_KEY = 'mugBotServerUrl';
+    const SERVER_URL_DEFAULT = 'http://51.68.212.98:3001';
+
+    function serverUrl() {
+        const stored = (localStorage.getItem(SERVER_URL_KEY) || '').trim().replace(/\/+$/, '');
+        return /^https?:\/\//.test(stored) ? stored : SERVER_URL_DEFAULT;
+    }
+
+    function promptForServerUrl() {
+        const next = prompt('Mug bot ingest server address\n\n' +
+                            '(shared with the item-matcher userscript)', serverUrl());
+        if (next === null) return;
+        const trimmed = next.trim().replace(/\/+$/, '');
+        if (trimmed && !/^https?:\/\//.test(trimmed)) {
+            alert('That does not look like a URL — it needs to start with http:// or https://');
+            return;
+        }
+        if (trimmed) {
+            localStorage.setItem(SERVER_URL_KEY, trimmed);
+        } else {
+            localStorage.removeItem(SERVER_URL_KEY);   // blank = back to the built-in default
+        }
+        serverReachable = true;       // unknown again until the next request says otherwise
+        console.log('[MARKET TRACKER] server set to', serverUrl());
+        updateToggleUI();
+    }
+
+    // Reachability, tracked so it can be SHOWN. A script that cannot reach its server has to say so
+    // where you can see it; console.error alone is how the drift above went unnoticed.
+    let serverReachable = true;
+
+    /** Every POST to the mug bot goes through here, so there is exactly one place that knows
+     *  whether the server is answering. */
+    function postToServer(path, body, label) {
+        GM.xmlHttpRequest({
+            method: 'POST',
+            url: `${serverUrl()}${path}`,
+            data: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+            onload: (response) => {
+                const ok = response.status >= 200 && response.status < 300;
+                if (!ok) console.error(`[${label}] server returned HTTP ${response.status}`);
+                if (ok !== serverReachable) { serverReachable = ok; updateToggleUI(); }
+            },
+            onerror: (response) => {
+                console.error(`[${label}] cannot reach ${serverUrl()}`, response);
+                if (serverReachable) { serverReachable = false; updateToggleUI(); }
+            }
+        });
+    }
 
     // === COMPLIANCE: only ever act while THIS page is actively viewed ===
     // Torn's rules permit using/forwarding a page's WebSocket only while it is in the
@@ -30,8 +95,14 @@
 
     let centrifuge = null;
 
-    // Toggle functionality
-    let trackingEnabled = GM.getValue ? GM.getValue('marketTrackerEnabled', true) : (localStorage.getItem('marketTrackerEnabled') !== 'false');
+    // Toggle functionality.
+    //
+    // localStorage, not GM storage. This previously read `GM.getValue ? GM.getValue(...) : ...`,
+    // which only worked because GM.getValue is undefined without an @grant — had one ever been
+    // added, GM.getValue returns a PROMISE, and a promise is always truthy, so tracking would have
+    // silently become permanently ON. Same store as the server address, so both settings move
+    // together.
+    let trackingEnabled = localStorage.getItem('marketTrackerEnabled') !== 'false';
 
     function createToggleButton() {
         // Find a good place to add the toggle button
@@ -81,12 +152,7 @@
             trackingEnabled = !trackingEnabled;
             updateToggleUI();
 
-            // Save preference
-            if (GM.setValue) {
-                GM.setValue('marketTrackerEnabled', trackingEnabled);
-            } else {
-                localStorage.setItem('marketTrackerEnabled', trackingEnabled.toString());
-            }
+            localStorage.setItem('marketTrackerEnabled', trackingEnabled.toString());
 
             console.log(`[MARKET TRACKER] Tracking ${trackingEnabled ? 'enabled' : 'disabled'}`);
 
@@ -99,6 +165,15 @@
             }
         });
 
+        // Which server, and whether it is answering. The whole point of #15: a script posting into
+        // the void must look different from a script that is working.
+        let serverIndicator = document.createElement('div');
+        serverIndicator.id = 'mt-server-indicator';
+        serverIndicator.title = 'Click to change the mug bot server address';
+        serverIndicator.style.cssText = 'font-size: 10px; cursor: pointer; font-weight: bold;';
+        serverIndicator.addEventListener('click', promptForServerUrl);
+
+        toggleContainer.appendChild(serverIndicator);
         toggleContainer.appendChild(statusIndicator);
         toggleContainer.appendChild(toggleButton);
         header.style.position = 'relative';
@@ -118,6 +193,25 @@
             statusIndicator.textContent = trackingEnabled ? 'Active' : 'Disabled';
             statusIndicator.style.color = trackingEnabled ? '#00aa00' : '#aa0000';
         }
+
+        let serverIndicator = document.getElementById('mt-server-indicator');
+        if (serverIndicator) {
+            const host = serverUrl().replace(/^https?:\/\//, '');
+            if (!wsToken) {
+                // No token means no subscription and therefore no data, ever. Without this the
+                // script looks perfectly healthy while doing nothing at all.
+                serverIndicator.textContent = '\u26a0 NO WS TOKEN';
+                serverIndicator.style.color = '#ffaa00';
+            } else {
+                serverIndicator.textContent = serverReachable ? host : `\u26a0 ${host} UNREACHABLE`;
+                serverIndicator.style.color = serverReachable ? '#888' : '#ff4444';
+            }
+        }
+    }
+
+    if (typeof GM !== 'undefined' && GM.registerMenuCommand) {
+        GM.registerMenuCommand('Set mug-bot server URL', promptForServerUrl);
+        GM.registerMenuCommand('Set Torn WebSocket token', promptForWsToken);
     }
 
     // Create toggle button when page loads
@@ -156,12 +250,37 @@
     };
 
     // === WebSocket auth token (per Torn ACCOUNT, not per page) ===
-    // JWT whose payload is {"sub":"<your Torn user id>"} — it identifies the logged-in user
-    // and is reused for every channel subscription. The value below is the original author's;
-    // REPLACE IT WITH YOUR OWN so you connect as yourself.
-    // TODO(investigation): pull this live from the page you're viewing instead of hardcoding,
-    // so it is always your own current session token (see README → "WebSocket token").
-    const wsToken = 'PASTE_YOUR_OWN_WSTOKEN_HERE';   // per-account Torn Centrifugo JWT — see README
+    // JWT whose payload is {"sub":"<your Torn user id>"} — it identifies the logged-in user and is
+    // reused for every channel subscription.
+    //
+    // In GM storage, NOT localStorage and NOT this file. Unlike the server address this IS a
+    // secret: it authenticates as you. localStorage is readable by any script Torn itself loads,
+    // and a per-install secret committed to shared source is the defect that had the original
+    // author's token shipping to everyone who installed this.
+    //
+    // TODO(investigation): pull it live from the page instead of storing it at all, so it is always
+    // the current session's own token (see README → "WebSocket token").
+    let wsToken = '';
+    GM.getValue('wsToken', '').then(v => {
+        wsToken = (v || '').trim();
+        updateToggleUI();
+        if (wsToken) handleCategoryWebSocket();   // resolved after page load — connect now
+        else console.warn('[MARKET TRACKER] no WebSocket token set — nothing will be tracked. ' +
+                          'Userscript menu -> "Set Torn WebSocket token".');
+    });
+
+    function promptForWsToken() {
+        const next = prompt('Torn Centrifugo WebSocket token (JWT)\n\n' +
+                            'Per ACCOUNT, not per page. See the README for how to read yours off ' +
+                            'the item market page. Stored in this userscript manager only.',
+                            wsToken);
+        if (next === null) return;
+        wsToken = next.trim();
+        GM.setValue('wsToken', wsToken);
+        console.log('[MARKET TRACKER] WebSocket token', wsToken ? 'set' : 'cleared');
+        updateToggleUI();
+        if (wsToken) handleCategoryWebSocket(); else disconnectWebSocket();
+    }
 
     // Observe for expanded item tiles to subscribe to the channel
     const itemObserver = new MutationObserver((mutations) => {
@@ -226,40 +345,19 @@
 
               console.log('[WS] Sending', action, 'for', channel);
               // Send to server
-              GM.xmlHttpRequest({
-                method: 'POST',
-              url: `${SERVER_URL}/market`,
-                data: JSON.stringify({ channel, data: [msg.data] }),
-                headers: { 'Content-Type': 'application/json' },
-                onload: (response) => console.log('[WS] Sent to server'),
-                onerror: (response) => console.error('[WS] Error sending to server', response)
-              });
+              postToServer('/market', { channel, data: [msg.data] }, 'WS');
             });
             sub.subscribe();
             console.log('[MARKET TRACKER] Subscribed to', channel);
 
             // Send initial ping to status
-            GM.xmlHttpRequest({
-              method: 'POST',
-              url: `${SERVER_URL}/status`,
-              data: JSON.stringify({ tracked: [parseInt(itemId)] }),
-              headers: { 'Content-Type': 'application/json' },
-              onload: (response) => console.log('[STATUS] Sent initial ping'),
-              onerror: (response) => console.error('[STATUS] Error sending ping', response)
-            });
+            postToServer('/status', { tracked: [parseInt(itemId)] }, 'STATUS');
 
             // Heartbeat ONLY while actively viewing (compliance). Stops + disconnects the
             // moment the page is no longer actively viewed, so status-tracker goes red.
             const pingInterval = setInterval(() => {
               if (!isActivelyViewing()) { disconnectWebSocket(); return; }
-              GM.xmlHttpRequest({
-                method: 'POST',
-                url: `${SERVER_URL}/status`,
-                data: JSON.stringify({ tracked: [parseInt(itemId)] }),
-                headers: { 'Content-Type': 'application/json' },
-                onload: (response) => console.log('[STATUS] Sent heartbeat'),
-                onerror: (response) => console.error('[STATUS] Error sending heartbeat', response)
-              });
+              postToServer('/status', { tracked: [parseInt(itemId)] }, 'STATUS');
             }, HEARTBEAT_MS);
 
             // Store interval for cleanup
@@ -317,40 +415,19 @@
 
             console.log('[WS] Sending', action, 'for category', channel);
               // Send to server
-              GM.xmlHttpRequest({
-                method: 'POST',
-                url: `${SERVER_URL}/market`,
-                data: JSON.stringify({ channel, data: [msg.data] }),
-                headers: { 'Content-Type': 'application/json' },
-                onload: (response) => console.log('[WS] Sent to server'),
-                onerror: (response) => console.error('[WS] Error sending to server', response)
-              });
+              postToServer('/market', { channel, data: [msg.data] }, 'WS');
         });
         sub.subscribe();
         console.log('[MARKET TRACKER] Subscribed to category channel:', channel);
 
         // Send initial ping to status
-        GM.xmlHttpRequest({
-            method: 'POST',
-            url: `${SERVER_URL}/status`,
-            data: JSON.stringify({ tracked: [categoryName] }),
-            headers: { 'Content-Type': 'application/json' },
-            onload: (response) => console.log('[STATUS] Sent initial ping for', categoryName),
-            onerror: (response) => console.error('[STATUS] Error sending ping', response)
-        });
+        postToServer('/status', { tracked: [categoryName] }, 'STATUS');
 
         // Heartbeat ONLY while actively viewing (compliance). Stops + disconnects the
         // moment the page is no longer actively viewed, so status-tracker goes red.
         const pingInterval = setInterval(() => {
             if (!isActivelyViewing()) { disconnectWebSocket(); return; }
-            GM.xmlHttpRequest({
-                method: 'POST',
-                url: `${SERVER_URL}/status`,
-                data: JSON.stringify({ tracked: [categoryName] }),
-                headers: { 'Content-Type': 'application/json' },
-                onload: (response) => console.log('[STATUS] Sent heartbeat for', categoryName),
-                onerror: (response) => console.error('[STATUS] Error sending heartbeat', response)
-            });
+            postToServer('/status', { tracked: [categoryName] }, 'STATUS');
         }, HEARTBEAT_MS);
 
         // Store interval for cleanup

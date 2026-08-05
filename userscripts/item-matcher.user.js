@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Item Matcher
-// @version      1.16
+// @version      1.17
 // @description  Matches the seller of items for the Mug Bot
 // @author       MonChoon
 // @match        https://www.torn.com/page.php?sid=ItemMarket*
@@ -10,6 +10,7 @@
 // @grant        GM.getValue
 // @grant        GM.setValue
 // @grant        GM.registerMenuCommand
+// @connect      51.68.212.98
 // ==/UserScript==
 
 (function() {
@@ -266,8 +267,22 @@
 
     // Consolidated: anon + regular gear now share ONE server/DB (the old split into a
     // separate :3002 anon server only existed because the original server was unavailable).
-    const SERVER_URL = 'http://51.68.212.98:3001';
-    const ANON_SERVER_URL = SERVER_URL;
+    //
+    // The address is a SETTING, not a constant. It used to be a hardcoded constant in tracked
+    // source, and THIS script is the cautionary tale: when the box moved, this file kept pointing
+    // at the retired one and every gear capture went into the void for weeks — silently, because a
+    // network error is one line in a log panel nobody was reading. See #15 / #37.
+    //
+    // Kept in localStorage rather than GM storage so market-tracker reads the SAME value; the two
+    // scripts share an origin but not GM storage, and them drifting apart is the original defect.
+    // The constant below is only the fresh-install fallback.
+    const SERVER_URL_KEY = 'mugBotServerUrl';
+    const SERVER_URL_DEFAULT = 'http://51.68.212.98:3001';
+
+    function serverUrl() {
+        const stored = (localStorage.getItem(SERVER_URL_KEY) || '').trim().replace(/\/+$/, '');
+        return /^https?:\/\//.test(stored) ? stored : SERVER_URL_DEFAULT;
+    }
 
     // DEBUG: when true, the script does NOT POST to the server. Instead it logs the raw
     // getListing response + the exact payload it WOULD send to the console as JSON, so we can
@@ -279,12 +294,14 @@
     // the script's Log panel (handy for debugging the matching flow). Leave false for quiet logs.
     const VERBOSE = false;
 
-    const MAIN_SUBMIT_URL = `${SERVER_URL}/gear`;
-    const MAIN_UNCACHED_URL = `${SERVER_URL}/cache/uncached`;
-    const MAIN_GEAR_CACHE_URL = `${SERVER_URL}/cache/gear`;
+    // Functions, not constants: the address can change at runtime (menu command / status pill),
+    // and a constant captured at load would keep posting to the old box until a page reload.
+    const MAIN_SUBMIT_URL = () => `${serverUrl()}/gear`;
+    const MAIN_UNCACHED_URL = () => `${serverUrl()}/cache/uncached`;
+    const MAIN_GEAR_CACHE_URL = () => `${serverUrl()}/cache/gear`;
 
-    const ANON_SUBMIT_URL = `${ANON_SERVER_URL}/gear/anon`;
-    const ANON_GEAR_CACHE_URL = `${ANON_SERVER_URL}/cache/gear/anon`;
+    const ANON_SUBMIT_URL = () => `${serverUrl()}/gear/anon`;
+    const ANON_GEAR_CACHE_URL = () => `${serverUrl()}/cache/gear/anon`;
 
     const SEND_QUEUE_INTERVAL = 500;
     const GEAR_CACHE_EXPIRY_MS = 10 * 60 * 1000;
@@ -349,6 +366,40 @@
     let anonGearCacheLastFetch = null;
     let isFetchingAnonGearCache = false;
     let isAnonServerAvailable = true;
+    // The MAIN server's reachability. The anon server has had this since it was a separate box; the
+    // main one never did, which is exactly why this script pointing at a retired host went unnoticed
+    // for weeks. Not persisted: on a fresh page load the honest answer is "unknown", and the first
+    // request settles it within seconds.
+    let isMainServerAvailable = true;
+
+    /** Record whether the main server is answering, and surface it if that changed. */
+    function promptForServerUrl() {
+        const next = prompt('Mug bot server address\n\n' +
+                            '(shared with the market-tracker userscript)', serverUrl());
+        if (next === null) return;
+        const trimmed = next.trim().replace(/\/+$/, '');
+        if (trimmed && !/^https?:\/\//.test(trimmed)) {
+            alert('That does not look like a URL — it needs to start with http:// or https://');
+            return;
+        }
+        if (trimmed) {
+            localStorage.setItem(SERVER_URL_KEY, trimmed);
+        } else {
+            localStorage.removeItem(SERVER_URL_KEY);   // blank = back to the built-in default
+        }
+        isMainServerAvailable = true;      // unknown again until the next request says otherwise
+        addDebugLog(`Server set to ${serverUrl()}`);
+        updateStatsUI();
+        fetchUncachedItems();              // prove it immediately rather than at the next tick
+    }
+
+    function markMainServer(ok, why) {
+        if (ok === isMainServerAvailable) return;
+        isMainServerAvailable = ok;
+        addDebugLog(ok ? `\u2713 server reachable again (${serverUrl()})`
+                       : `\u26a0 SERVER UNREACHABLE: ${serverUrl()} — ${why}`);
+        updateStatsUI();
+    }
     let anonServerLastCheckTime = null;
 
     let prevUncachedCount = 0;
@@ -551,7 +602,7 @@
 
         GM[httpRequest]({
             method: 'GET',
-            url: MAIN_UNCACHED_URL,
+            url: MAIN_UNCACHED_URL(),
             responseType: 'json',
             onload: async function(response) {
                 isFetching = false;
@@ -561,6 +612,7 @@
                         uncachedItems = data.listings || [];
                         lastFetchTime = new Date();
                         selectedSortedItemIndex = -1;
+                        markMainServer(true);
                         addDebugLog(`✓ Fetched ${uncachedItems.length} uncached items`);
                         vlog('← /cache/uncached: ' + JSON.stringify(uncachedItems));
 
@@ -574,12 +626,14 @@
                         updateStatsUI();
                     }
                 } else {
+                    markMainServer(false, `HTTP ${response.status}`);
                     addDebugLog(`✗ Fetch failed (HTTP ${response.status})`);
                     updateStatsUI();
                 }
             },
             onerror: function() {
                 isFetching = false;
+                markMainServer(false, 'network error');
                 addDebugLog(`✗ Network error fetching uncached items`);
                 updateStatsUI();
             }
@@ -605,7 +659,7 @@
 
         GM[httpRequest]({
             method: 'GET',
-            url: MAIN_GEAR_CACHE_URL,
+            url: MAIN_GEAR_CACHE_URL(),
             responseType: 'json',
             onload: async function(response) {
                 isFetchingGearCache = false;
@@ -614,6 +668,7 @@
                         const data = response.response || JSON.parse(response.responseText);
                         gearCacheItems = data.listings || [];
                         gearCacheLastFetch = new Date();
+                        markMainServer(true);
                         addDebugLog(`✓ Fetched ${gearCacheItems.length} gear cache items`);
 
                         await GM.setValue('gearCacheItems', gearCacheItems);
@@ -626,12 +681,14 @@
                         updateStatsUI();
                     }
                 } else {
+                    markMainServer(false, `HTTP ${response.status}`);
                     addDebugLog(`✗ Gear cache fetch failed (HTTP ${response.status})`);
                     updateStatsUI();
                 }
             },
             onerror: function() {
                 isFetchingGearCache = false;
+                markMainServer(false, 'network error');
                 addDebugLog(`✗ Network error fetching gear cache`);
                 updateStatsUI();
             }
@@ -661,7 +718,7 @@
 
         GM[httpRequest]({
             method: 'GET',
-            url: ANON_GEAR_CACHE_URL,
+            url: ANON_GEAR_CACHE_URL(),
             responseType: 'json',
             timeout: 5000,
             onload: async function(response) {
@@ -1083,11 +1140,13 @@
         vlog('→ POST /items (' + payload.length + '): ' + JSON.stringify(payload));
         GM[httpRequest]({
             method: 'POST',
-            url: `${SERVER_URL}/items`,
+            url: `${serverUrl()}/items`,
             data: JSON.stringify({ listings: payload }),
             headers: { 'Content-Type': 'application/json' },
-            onload: (r) => { addDebugLog(`✓ Sent ${payload.length} item listings`); vlog('← /items ' + r.status); },
-            onerror: () => addDebugLog(`✗ Error sending item listings`)
+            onload: (r) => { markMainServer(r.status === 200, `HTTP ${r.status}`);
+                             addDebugLog(`✓ Sent ${payload.length} item listings`); vlog('← /items ' + r.status); },
+            onerror: () => { markMainServer(false, 'network error');
+                             addDebugLog(`✗ Error sending item listings`); }
         });
     }
 
@@ -1099,13 +1158,14 @@
         vlog('→ POST /gear: ' + JSON.stringify(listingData));
         GM[httpRequest]({
             method: 'POST',
-            url: MAIN_SUBMIT_URL,
+            url: MAIN_SUBMIT_URL(),
             data: JSON.stringify(listingData),
             headers: { 'Content-Type': 'application/json' },
             responseType: 'json',
             onload: function(response) {
                 if (response.status === 200) {
                     itemsSentCount++;
+                    markMainServer(true);
                     addDebugLog(`✓ Sent: ${listingData.item_name} ($${listingData.price})`);
 
                     // NOTE: we do NOT optimistically remove the item from the uncached list here. A
@@ -1135,10 +1195,12 @@
 
                     refreshTileForListing(listingData);
                 } else {
+                    markMainServer(false, `HTTP ${response.status}`);
                     addDebugLog(`✗ Failed to send (HTTP ${response.status}): ${listingData.item_name}`);
                 }
             },
             onerror: function() {
+                markMainServer(false, 'network error');
                 addDebugLog(`✗ Network error sending: ${listingData.item_name}`);
             }
         });
@@ -1167,7 +1229,7 @@
         }
         GM[httpRequest]({
             method: 'POST',
-            url: ANON_SUBMIT_URL,
+            url: ANON_SUBMIT_URL(),
             data: JSON.stringify(normalizedData),
             headers: { 'Content-Type': 'application/json' },
             responseType: 'json',
@@ -1594,6 +1656,13 @@
                         <span id="im-log-toggle" style="color: #4488ff; cursor: pointer; text-decoration: underline;">Log</span>
                     </div>
                 </div>
+                <div style="font-size: 9px; margin-top: 4px;">
+                    <span style="color: #666;">Server: </span>
+                    <span id="im-server-url" title="Click to change (shared with market-tracker)" style="
+                        color: ${isMainServerAvailable ? '#888' : '#ff6666'};
+                        cursor: pointer; text-decoration: underline; word-break: break-all;
+                    ">${serverUrl().replace(/^https?:\/\//, '')}</span>
+                </div>
                 ${settingsContentHTML}
                 ${debugLogsHTML}
             </div>
@@ -1620,7 +1689,21 @@
         const _prevLogScroll = document.getElementById('debug-log-content')?.scrollTop;
         const _prevUncachedScroll = document.getElementById('im-uncached-scroll')?.scrollTop;
 
+        // An unreachable server is the one failure that used to be invisible — captures kept being
+        // queued and thrown away with a single line in a log panel nobody opens. It gets the top of
+        // the panel, in red, above everything else.
+        const serverBanner = isMainServerAvailable ? '' : `
+            <div style="background: #4a1111; border: 1px solid #ff4444; border-radius: 4px;
+                        padding: 6px; margin-bottom: 8px; font-size: 11px; color: #ff9999;">
+                <div style="font-weight: bold; color: #ff6666;">\u26a0 SERVER UNREACHABLE</div>
+                <div style="margin-top: 2px; word-break: break-all;">${serverUrl()}</div>
+                <div style="margin-top: 2px; color: #cc8888;">Nothing is being captured. Click the
+                    address below to change it.</div>
+            </div>
+        `;
+
         statsUI.innerHTML = `
+            ${serverBanner}
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <div style="font-weight: bold; color: ${statusColor};">Item Matcher ${statusText}</div>
 
@@ -1732,6 +1815,7 @@
         document.getElementById('im-uncached-toggle')?.addEventListener('click', toggleUncachedList);
         document.getElementById('im-price-filter-toggle')?.addEventListener('click', toggleSettings);
         document.getElementById('im-log-toggle')?.addEventListener('click', toggleDebugLog);
+        document.getElementById('im-server-url')?.addEventListener('click', promptForServerUrl);
         document.getElementById('im-uncached-sort-price')?.addEventListener('click', () => setUncachedSort('price'));
         document.getElementById('im-uncached-sort-name')?.addEventListener('click', () => setUncachedSort('name'));
 
@@ -1768,6 +1852,7 @@
     loadScriptState().then(() => {
         setupApiInterception();
 
+        GM.registerMenuCommand('Set mug-bot server URL', promptForServerUrl);
         GM.registerMenuCommand('Toggle Item Matcher', toggleScript);
         GM.registerMenuCommand('Fetch Uncached Items', fetchUncachedItems);
         GM.registerMenuCommand('Refresh Gear Cache', () => fetchGearCache(true));
