@@ -455,6 +455,29 @@ async def upsert_unmatched_gear(*, uid, item_id, item_name, price, stat, accurac
     await _commit()
 
 
+async def gear_uid_state(uid) -> Dict:
+    """What we knew about this uid BEFORE an item-matcher capture lands on it.
+
+    Read before the write, because the write is what destroys the answer: storing a capture deletes
+    the unmatched_gear row, so asking afterwards can never distinguish "this resolved a queued
+    listing" from "this was a uid we had never seen".
+
+    Three PK lookups and one in-memory set — cheap enough to run per capture.
+    """
+    uid = str(uid)
+    cur = await _db.execute("SELECT 1 FROM unmatched_gear WHERE uid=?", (uid,))
+    unmatched = (await cur.fetchone()) is not None
+    cur = await _db.execute(
+        "SELECT seller_id, attribution, item_name FROM tracked_gear WHERE uid=?", (uid,))
+    tracked = await cur.fetchone()
+    return {
+        "unmatched": unmatched,
+        "anon": uid in await get_anon_uid_set(),
+        "tracked_seller": tracked["seller_id"] if tracked else None,
+        "tracked_attribution": tracked["attribution"] if tracked else None,
+    }
+
+
 async def remove_unmatched_gear(uid) -> None:
     await _db.execute("DELETE FROM unmatched_gear WHERE uid=?", (str(uid),))
     await _commit()

@@ -13,7 +13,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +35,55 @@ def _page_label(token: Any) -> Optional[str]:
     if s.isdigit():
         return config.ITEM_MAP.get(int(s), s)
     return s
+
+
+def _stat_bits(stats: Any) -> str:
+    """The numbers you would read off the tile, in the order the tile shows them. Only the fields
+    actually present — `damage_armor` is damage for a weapon and armour rating for armour, and the
+    capture does not say which, so both spellings are passed through as sent rather than guessed."""
+    stats = stats if isinstance(stats, dict) else {}
+    bits = []
+    for key, label in (("damage", "dmg"), ("armor", "armor"), ("armour", "armor"),
+                       ("accuracy", "acc"), ("quality", "qual")):
+        val = stats.get(key)
+        if val is not None:
+            try:
+                bits.append(f"{label}={float(val):g}")
+            except (TypeError, ValueError):
+                bits.append(f"{label}={val}")
+    return " ".join(bits)
+
+
+def _capture_disposition(prior: Dict, *, anonymous: bool, seller_id, watched: bool) -> str:
+    """What this capture DID — the line worth grepping when the unmatched list misbehaves.
+
+    The distinction that matters for debugging is `resolved` vs `not-queued`: both store the same
+    row, but the second means the item-matcher submitted a uid the poller had never listed as
+    needing capture — a real discrepancy between what the userscript sees on the page and what the
+    API poller sees on the market.
+
+    `not-watched` is carved out of it deliberately. The matcher runs on whatever item market page a
+    human opens; the poller only looks at the watchlist. A capture for an unwatched item is not a
+    discrepancy, it is the normal case, and lumping it in with `not-queued` would bury the real
+    ones under a constant stream of warnings about working correctly.
+    """
+    if anonymous:
+        if prior["anon"]:
+            return "anon-again"           # already stashed; the human re-marked it
+        if prior["unmatched"]:
+            return "anon-resolved"
+        return "anon-not-watched" if not watched else "anon-not-queued"
+    if not seller_id:
+        return "no-seller"                # a named capture that carried no usable lister id
+    if prior["unmatched"]:
+        return "resolved"                 # exactly what the queue existed for
+    if prior["tracked_attribution"] == "auction":
+        return "replaces-inference"       # a capture superseding an AH guess — the strongest case
+    if prior["tracked_seller"] == seller_id:
+        return "refresh"                  # same uid, same seller: a re-submission
+    if prior["tracked_seller"]:
+        return "seller-changed"           # the uid moved to somebody else
+    return "not-queued" if watched else "not-watched"
 
 
 async def _store_gear(body: Any, *, anonymous: bool) -> None:
@@ -63,6 +112,14 @@ async def _store_gear(body: Any, *, anonymous: bool) -> None:
             seller_id = int(raw) or None
         seller_name = body.get("seller_name") or (body.get("user") or {}).get("name")
 
+    # Read BEFORE the write, both of them. Storing the capture deletes the unmatched row AND
+    # auto-adds the item to the watchlist (store_gear_listing -> watchlist_ensure), so asked
+    # afterwards every capture looks like a watched item whose uid we had never queued — which is
+    # exactly the false discrepancy this logging exists to avoid reporting.
+    prior = await db.gear_uid_state(armoury_uid) if armoury_uid else {
+        "unmatched": False, "anon": False, "tracked_seller": None, "tracked_attribution": None}
+    watched = bool(item_id) and await db.is_item_watched(item_id)
+
     if seller_id:
         await db.upsert_seller_seen(user_id=seller_id, name=seller_name)
     await db.store_gear_listing(
@@ -70,9 +127,23 @@ async def _store_gear(body: Any, *, anonymous: bool) -> None:
         price=price, stats_json=json.dumps(stats) if stats else None,
         armoury_uid=str(armoury_uid) if armoury_uid else None,
     )
-    if config.DEBUG_GEAR:
-        log.info("/gear stored: listing=%s uid=%s item_id=%s seller=%s price=%s anon=%s",
-                 listing_id, armoury_uid, item_id, seller_id, price, anonymous)
+    disposition = _capture_disposition(prior, anonymous=anonymous, seller_id=seller_id,
+                                       watched=watched)
+    who = f"{seller_name or '?'}[{seller_id}]" if seller_id else "ANONYMOUS"
+    stat_bits = _stat_bits(stats)
+    # One line per capture, at INFO. Volume is a human clicking through listings, not a poll loop,
+    # so this is a handful a minute at most — and it is the only record of what the item-matcher
+    # actually sent, as opposed to uvicorn's "POST /gear 200 OK".
+    log.info("capture %-16s %s uid=%s price=%s %s seller=%s listing=%s",
+             disposition, item_name or f"item {item_id}", armoury_uid or "-",
+             f"${int(price):,}" if str(price or "").isdigit() else price,
+             stat_bits, who, listing_id)
+    if disposition in ("not-queued", "anon-not-queued"):
+        log.warning("uid=%s (%s) was NOT on the unmatched list — the item-matcher saw a listing "
+                    "the poller had not queued for capture", armoury_uid, item_name)
+    elif disposition == "seller-changed":
+        log.warning("uid=%s (%s) changed hands: tracked as %s, captured as %s",
+                    armoury_uid, item_name, prior["tracked_seller"], seller_id)
     # Reconcile against the poller's unmatched/anon lists (matched by uid == armouryID).
     if armoury_uid:
         if anonymous:
@@ -250,11 +321,27 @@ def create_app(bot=None) -> FastAPI:
         for r in rows:
             await _store_item(r)
         _touch()
+        # A batch, not a click — summarised rather than logged per row, which at stackable volumes
+        # would bury the gear captures that are worth reading.
+        if rows:
+            named = sum(1 for r in rows if isinstance(r, dict)
+                        and (r.get("seller_id") or r.get("lister") or (r.get("user") or {}).get("ID")))
+            log.info("capture items: %d listing(s), %d with a seller", len(rows), named)
         return {"ok": True, "stored": len(rows)}
+
+    # The item-matcher polls these every 30s, so logging each hit would be pure noise — uvicorn
+    # already does that. Logged only when the queue length CHANGES, which is the thing worth
+    # watching: a count that never falls means captures are not clearing the queue.
+    _last_uncached = {"n": None}
 
     @app.get("/cache/uncached")
     async def cache_uncached():
-        return {"listings": await db.get_uncached_for_matcher()}
+        listings = await db.get_uncached_for_matcher()
+        if len(listings) != _last_uncached["n"]:
+            log.info("unmatched queue: %d listing(s) awaiting capture (was %s)",
+                     len(listings), _last_uncached["n"] if _last_uncached["n"] is not None else "-")
+            _last_uncached["n"] = len(listings)
+        return {"listings": listings}
 
     @app.get("/cache/gear")
     async def cache_gear():

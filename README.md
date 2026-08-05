@@ -616,6 +616,43 @@ The result **count is capped** at 5,000 (`total_capped: true` says so). An unbou
 was 91ms and grows forever while the page query does not — on a reachable endpoint that is a
 scaling trap, not just a slow page.
 
+### Reading the capture log
+
+`uvicorn` logs `POST /gear 200 OK`, which tells you a capture happened and nothing else. Each one
+now also logs what the item-matcher actually sent, and — the part worth grepping — **what it did**:
+
+```
+capture resolved         Sai uid=777 price=$153,900,001 dmg=37.31 acc=60.48 seller=MonChoon[2250591] listing=L1
+capture refresh          Sai uid=777 price=$153,900,001 dmg=37.31 acc=60.48 seller=MonChoon[2250591] listing=L1
+capture replaces-inference Sai uid=888 price=$99,000,000 dmg=30 acc=55 seller=RealSeller[7654321] listing=L4
+```
+
+| disposition | |
+|---|---|
+| `resolved` | cleared a listing the poller was waiting on — what the queue exists for |
+| `refresh` | same uid, same seller: a re-submission, not a discrepancy |
+| `replaces-inference` | a human just replaced an AH guess with an observation |
+| `seller-changed` | **warns** — tracked as one player, captured as another |
+| `not-queued` | **warns** — we poll this item, so the poller should have queued this listing and did not |
+| `not-watched` | the item is not on the watchlist, so the poller was never looking. Normal. |
+| `anon-*` | the same states for an anonymous listing |
+
+`not-watched` is carved out of `not-queued` deliberately. The matcher runs on whatever market page
+you open; the poller only watches the watchlist. Warning about those would bury the real
+discrepancies under a constant stream of warnings about working correctly.
+
+Both the queue state and the watchlist state are read **before** the capture is stored, because
+storing it deletes the unmatched row *and* auto-adds the item to the watchlist — asked afterwards,
+every capture looks like a watched item that was never queued.
+
+The unmatched queue length is logged only when it **changes** (the matcher polls it every 30s):
+
+```
+unmatched queue: 251 listing(s) awaiting capture (was 250)
+```
+
+A count that never falls means captures are not clearing the queue.
+
 ### The price-checker userscript
 
 `userscripts/ah-price-checker.user.js` is **WinterValor [3945658]'s** script, MIT licensed, with one
