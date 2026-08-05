@@ -602,6 +602,8 @@ _FORWARD_COLS = {
     "sellers": _SELLER_FORWARD_COLS,
     "watchlist": {"category": "TEXT"},
     "item_values": {"type": "TEXT"},   # Torn item `type` (Primary/Secondary/Melee/Defensive/Drug/…)
+    "sales": {"attribution": "TEXT",   # 'matcher' | 'auction' — how the seller was known
+              "confidence": "REAL"},   # the inference's P(correct); NULL for a direct capture
     "tracked_gear": {"seen": "INTEGER",    # polls present since attribution (stale-match guard)
                      # How we know who the seller is: NULL/'matcher' = the item-matcher captured
                      # them; 'auction' = INFERRED from an AH win. The alert has to be able to tell
@@ -641,6 +643,15 @@ async def _drop_inferences_that_skipped_the_matcher() -> int:
     return removed
 
 
+# Indexes over forward-migrated columns. They CANNOT live in schema.sql: on an existing database
+# `CREATE TABLE IF NOT EXISTS` is a no-op, so the column does not exist yet when that script runs,
+# and the CREATE INDEX raises "no such column" — taking init_db, and the whole process, down on
+# restart. Created here instead, after the ALTERs have run.
+_POST_MIGRATION_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS idx_sales_attribution ON sales(attribution, sold_at)",
+)
+
+
 async def _ensure_columns() -> None:
     for table, cols in _FORWARD_COLS.items():
         cur = await _db.execute(f"PRAGMA table_info({table})")
@@ -648,6 +659,8 @@ async def _ensure_columns() -> None:
         for col, typ in cols.items():
             if col not in have:
                 await _db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+    for stmt in _POST_MIGRATION_INDEXES:
+        await _db.execute(stmt)
     await _commit()
 
 
@@ -694,14 +707,19 @@ async def delete_listing(listing_id) -> None:
 
 
 async def record_sale(*, listing_id, item_id, item_name, seller_id, qty_sold,
-                      unit_price, sold_at=None) -> int:
+                      unit_price, sold_at=None, attribution=None, confidence=None) -> int:
+    """`attribution`/`confidence` say how the seller was known, and must be passed in rather than
+    looked up: the tracked_gear row they come from is deleted as the listing vanishes, which is the
+    same moment this runs. Without them there is no way to count alerts by source, and therefore no
+    way to tell whether the inference is worth keeping."""
     sold_at = sold_at or _now()
     total = int(qty_sold) * int(unit_price or 0)
     cur = await _db.execute(
         """INSERT INTO sales(listing_id, item_id, item_name, seller_id, qty_sold, unit_price,
-                             total_value, sold_at) VALUES (?,?,?,?,?,?,?,?)""",
+                             total_value, sold_at, attribution, confidence)
+           VALUES (?,?,?,?,?,?,?,?,?,?)""",
         (str(listing_id) if listing_id is not None else None, item_id, item_name, seller_id,
-         int(qty_sold), int(unit_price or 0), total, sold_at),
+         int(qty_sold), int(unit_price or 0), total, sold_at, attribution, confidence),
     )
     await _commit()
     return cur.lastrowid
@@ -763,6 +781,39 @@ async def anon_match_summary() -> Dict:
     return out
 
 
+async def alerts_by_attribution() -> List[Dict]:
+    """Every gear sale we recorded, with how the seller was known and what we later learned.
+
+    `contradicted` is the only honest label available without a human: a DIRECT capture for the same
+    uid, AFTER the sale, naming somebody else. `confirmed` is the same capture naming the same
+    player. Everything else is unknowable — and for an anonymous listing that is the common case,
+    because a seller who lists anonymously tends to keep doing so.
+    """
+    cur = await _db.execute(
+        """SELECT s.id, SUBSTR(s.listing_id, 5) AS uid, s.seller_id, s.sold_at,
+                  s.attribution, s.confidence
+             FROM sales s
+            WHERE s.listing_id LIKE 'uid:%' AND s.seller_id IS NOT NULL
+            ORDER BY s.sold_at"""
+    )
+    alerts = [dict(r) for r in await cur.fetchall()]
+    if not alerts:
+        return []
+
+    later: Dict[str, List] = {}
+    for obs in await observed_gear_owners():
+        later.setdefault(obs["uid"], []).append((obs["observed_at"], obs["seller_id"]))
+
+    for a in alerts:
+        after = [(ts, sid) for ts, sid in later.get(a["uid"], []) if ts > a["sold_at"]]
+        if not after:
+            a["verdict"] = "unknown"
+            continue
+        _, seller = min(after)                       # the FIRST later capture is the tightest test
+        a["verdict"] = "confirmed" if seller == a["seller_id"] else "contradicted"
+    return alerts
+
+
 async def observed_gear_owners() -> List[Dict]:
     """Every DIRECT observation of "uid X was listed by seller Y at time T" that we still hold.
 
@@ -779,11 +830,17 @@ async def observed_gear_owners() -> List[Dict]:
 
     Duplicates across sources are fine — the caller buckets by evidence age, and the same
     observation appearing twice does not bias the ratio it computes.
+
+    INFERRED sellers are excluded from all three sources. They are not observations — they are this
+    model's own output, and scoring against them would have the inference confirm itself. Before
+    attribution was recorded on the sale there was no way to filter them, so this could only get
+    more wrong as the feature produced more of them.
     """
     out: List[Dict] = []
     cur = await _db.execute(
         "SELECT listing_id, seller_id, sold_at FROM sales "
-        "WHERE listing_id LIKE 'uid:%' AND seller_id IS NOT NULL"
+        "WHERE listing_id LIKE 'uid:%' AND seller_id IS NOT NULL "
+        "AND (attribution IS NULL OR attribution <> 'auction')"
     )
     for row in await cur.fetchall():
         out.append({"uid": row[0][4:], "seller_id": row[1], "observed_at": row[2],
@@ -799,7 +856,8 @@ async def observed_gear_owners() -> List[Dict]:
                         "source": "listing"})
 
     cur = await _db.execute(
-        "SELECT uid, seller_id, first_seen FROM tracked_gear WHERE seller_id IS NOT NULL"
+        "SELECT uid, seller_id, first_seen FROM tracked_gear WHERE seller_id IS NOT NULL "
+        "AND (attribution IS NULL OR attribution <> 'auction')"
     )
     for row in await cur.fetchall():
         if row[2]:

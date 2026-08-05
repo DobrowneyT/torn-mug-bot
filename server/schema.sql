@@ -75,9 +75,19 @@ CREATE TABLE IF NOT EXISTS sales (
     qty_sold    INTEGER,
     unit_price  INTEGER,
     total_value INTEGER,
-    sold_at     INTEGER NOT NULL
+    sold_at     INTEGER NOT NULL,
+    -- HOW the seller was known: 'matcher' (a human read the name off the listing) or 'auction'
+    -- (inferred from an AH win). Recorded HERE because tracked_gear is deleted the moment the
+    -- listing vanishes — i.e. the attribution was being destroyed at the exact moment the alert
+    -- fired, leaving no way to count alerts by source or judge the inference on its hit rate.
+    attribution TEXT,
+    confidence  REAL              -- the inference's measured P(correct); NULL for a direct capture
 );
 CREATE INDEX IF NOT EXISTS idx_sales_seller ON sales(seller_id, sold_at);
+-- NOTE: the index over `attribution` is NOT here. On an existing database CREATE TABLE IF NOT
+-- EXISTS is a no-op, so a column added by forward-migration does not exist yet while this script
+-- runs — indexing it here raises "no such column" and takes init_db, and therefore the whole
+-- process, down on restart. It is created in _ensure_columns, after the ALTERs. See _POST_MIGRATION_INDEXES.
 
 -- Which pages/categories are being actively viewed right now (drives status-tracker).
 -- last_ping_at is refreshed by the userscript heartbeat only while a page is actively

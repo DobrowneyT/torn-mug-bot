@@ -454,6 +454,47 @@ the last action. Both now always appear: the seller falls back to the name on th
 than a bare user id, and an unknown last action prints as `*unknown*` rather than the line silently
 disappearing — a missing line reads as "nothing to report" rather than "we could not find out".
 
+### Is the inference worth keeping? (`verdict`)
+
+```bash
+./.venv/bin/python ah_scrape.py verdict
+```
+
+```
+band                alerts  checkable  contradicted  accuracy
+>= 0.88  (pings)        12          4             0    100.0%
+0.75 - 0.88             30         11             2     81.8%
+0.65 - 0.75             18          3             1     66.7%
+< 0.65                  24          2             1     50.0%
+direct capture         932        120             1     99.2%   <- control
+```
+
+The success criterion the scoring was always meant to face: **if the top band is not materially
+better than the bottom, the score is not earning its complexity and should be deleted rather than
+tuned.**
+
+Every sale now records how its seller was known (`sales.attribution`, and `sales.confidence` when
+it was inferred). That had to be written at sale time rather than looked up: `tracked_gear` is
+deleted the instant a listing vanishes, so the attribution was previously destroyed at the exact
+moment the alert fired. 8,271 sales predate the change and cannot be backfilled; the report says so
+rather than implying its sample is the whole history.
+
+Three things to read carefully, all printed with the numbers:
+
+- **`checkable` is the honest denominator.** The only label available without a human is a later
+  *direct capture* of the same uid — and an anonymous listing is never itself captured, so ground
+  truth arrives only if that uid later turns up in a **named** listing. Most never will, and the
+  ones that do are biased: a player who sometimes lists openly is not a player who always hides.
+  Accuracy here is a **lower bound**, not a measurement.
+- **The control row exists to invalidate the rest.** A direct capture should score ~100%. If it
+  does not, the ground truth is unreliable and no band above it means anything.
+- **Ownership can change** between the sale and the later capture, which counts as a contradiction
+  even where the inference was right at the time.
+
+Inferred sales are excluded from the ground truth in both `verdict` and `calibrate`. They are the
+model's own output, and scoring against them would have the inference confirm itself — which would
+have looked like excellent accuracy, because the same rule produced both sides.
+
 ### Searching by bonus (`reindex`)
 
 `bonuses` is stored as the raw JSON Torn returns, which is right for fidelity and useless for
