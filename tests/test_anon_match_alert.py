@@ -489,3 +489,44 @@ def test_reconcile_ignores_a_stale_inference_for_a_uid_the_matcher_never_saw(tmp
             "it should be queued for capture instead"
 
     _run(scenario, tmp_path, monkeypatch, "stale_inference")
+
+
+def test_the_sale_row_records_that_the_seller_was_inferred(tmp_path, monkeypatch):
+    """Written from the alert path, not by a test calling record_sale directly — the wiring is the
+    part that breaks. `tracked_gear` is deleted as the listing vanishes, which is the same moment
+    the sale is recorded, so if this is not passed through here the attribution is gone forever and
+    the alert path can never be judged on its hit rate."""
+    async def scenario():
+        await _anon_uid_won_at_auction(buyer_id=4242, age_days=3)
+        bot = FakeBot()
+        await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
+        await api_poller.reconcile_gear(bot, ITEM, {}, item_label="ArmaLite M-15A4")
+        await api_poller.drain_sale_tasks()
+
+        cur = await db._db.execute(
+            "SELECT attribution, confidence FROM sales WHERE listing_id=?", (f"uid:{UID}",))
+        attribution, confidence = await cur.fetchone()
+        assert attribution == "auction"
+        assert confidence == 0.88, "the confidence it acted on was not recorded with the sale"
+
+    _run(scenario, tmp_path, monkeypatch, "sale_attribution")
+
+
+def test_a_captured_seller_records_no_confidence(tmp_path, monkeypatch):
+    """A direct capture is an observation, not a probability. Storing a number here would put it in
+    a confidence band in the report and quietly inflate whichever band it landed in."""
+    async def scenario():
+        await db.upsert_listing(listing_id="L1", item_id=ITEM, item_name="ArmaLite M-15A4",
+                                seller_id=3333, price=50_000_000, available=1, anonymous=False,
+                                is_gear=True, armoury_uid=UID)
+        bot = FakeBot()
+        await api_poller.reconcile_gear(bot, ITEM, _listing(), item_label="ArmaLite M-15A4")
+        await api_poller.reconcile_gear(bot, ITEM, {}, item_label="ArmaLite M-15A4")
+        await api_poller.drain_sale_tasks()
+
+        cur = await db._db.execute(
+            "SELECT attribution, confidence FROM sales WHERE listing_id=?", (f"uid:{UID}",))
+        attribution, confidence = await cur.fetchone()
+        assert attribution == "matcher" and confidence is None
+
+    _run(scenario, tmp_path, monkeypatch, "sale_capture")

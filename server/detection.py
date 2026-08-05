@@ -221,6 +221,7 @@ async def on_sale(*, seller_id, item_id, item_name, qty, unit_price, listing_id=
         sale_id = await db.record_sale(
             listing_id=listing_id, item_id=item_id, item_name=item_name,
             seller_id=seller_id, qty_sold=qty, unit_price=unit_price,
+            attribution=attribution, confidence=(evidence or {}).get("confidence"),
         )
         # Per sale we only ensure the clothing flag is fresh (needed for the mug calc). Status/TBS
         # are fetched only if the threshold is crossed (see _evaluate_alert).

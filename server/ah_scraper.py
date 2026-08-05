@@ -11,6 +11,9 @@ Runs as a cron process, not inside the bot. Two modes:
   calibrate report how often AH-inferred ownership would have been CORRECT, by evidence age,
             measured against sellers we directly observed. This is what #12's confidence bands
             should be derived from. Reads both databases; makes no API calls.
+  verdict   is the confidence score earning its complexity? alerts and contradiction rate by
+            band, against a direct capture of the same uid afterwards. Read `checkable` first —
+            an anonymous listing is never itself captured, so the sample is small and biased.
   match     resolve every un-attributed uid against the ledger and write the result into the MAIN
             database, with a measured confidence. Runs automatically after `forward`.
   schema    machine-readable JSON schema of the ledger, with per-column semantics. For building
@@ -582,6 +585,91 @@ def _bucket_label(lo, hi) -> str:
     return f"{lo}-{hi}d" if hi is not None else f"{lo}d+"
 
 
+# Confidence bands for the verdict report, as (label, lower bound). Deliberately the same
+# boundaries the ping threshold sits on, so the report answers the question the threshold poses.
+_VERDICT_BANDS = ((">= 0.88  (pings)", 0.88), ("0.75 - 0.88", 0.75),
+                  ("0.65 - 0.75", 0.65), ("< 0.65", 0.0))
+
+
+def _verdict_band(confidence) -> str:
+    for label, lower in _VERDICT_BANDS:
+        if (confidence or 0.0) >= lower:
+            return label
+    return "< 0.65"
+
+
+async def show_verdict() -> None:
+    """Is the confidence score earning its complexity? -> alerts and contradiction rate, by band.
+
+    This is the success criterion the scoring work was always supposed to be judged against: if the
+    top band is not materially more accurate than the bottom one, the score is not doing anything
+    and should be deleted rather than tuned.
+
+    Read the `checkable` column before the accuracy column. The only label available without a human
+    is a LATER DIRECT CAPTURE of the same uid, and an anonymous listing is never itself captured —
+    so ground truth arrives only if that uid later shows up in a NAMED listing. Most will not, and
+    the ones that do are a biased sample: a player who sometimes lists openly is not a player who
+    always hides. Treat the number as a lower bound on accuracy, not a measurement of it.
+    """
+    from server import db
+
+    alerts = await db.alerts_by_attribution()
+    if not alerts:
+        print("no gear sales recorded yet — nothing to judge.")
+        return
+
+    inferred = [a for a in alerts if a["attribution"] == "auction"]
+    captured = [a for a in alerts if a["attribution"] == "matcher"]
+    unrecorded = [a for a in alerts if not a["attribution"]]
+
+    rows = {}
+    for a in inferred:
+        rows.setdefault(_verdict_band(a["confidence"]), [0, 0, 0])
+        r = rows[_verdict_band(a["confidence"])]
+        r[0] += 1
+        if a["verdict"] == "confirmed":
+            r[1] += 1
+        elif a["verdict"] == "contradicted":
+            r[2] += 1
+
+    print("anon-match verdict — alerts by confidence band")
+    print()
+    print(f"{'band':<18}{'alerts':>8}{'checkable':>11}{'contradicted':>14}{'accuracy':>10}")
+    for label, _ in _VERDICT_BANDS:
+        n, ok, bad = rows.get(label, [0, 0, 0])
+        checkable = ok + bad
+        acc = f"{ok / checkable * 100:.1f}%" if checkable else "-"
+        print(f"{label:<18}{n:>8}{checkable:>11}{bad:>14}{acc:>10}")
+
+    ok = sum(1 for a in captured if a["verdict"] == "confirmed")
+    bad = sum(1 for a in captured if a["verdict"] == "contradicted")
+    checkable = ok + bad
+    acc = f"{ok / checkable * 100:.1f}%" if checkable else "-"
+    print(f"{'direct capture':<18}{len(captured):>8}{checkable:>11}{bad:>14}{acc:>10}"
+          "   <- control")
+
+    print()
+    if unrecorded:
+        print(f"{len(unrecorded):,} older sale(s) predate attribution being recorded and are")
+        print("excluded. They cannot be backfilled — the attribution was deleted with the")
+        print("tracked_gear row at the moment each sale fired.")
+        print()
+    print("HOW TO READ THIS")
+    print("  `checkable` is the honest denominator. The only label available without a human is a")
+    print("  later DIRECT capture of the same uid — and an anonymous listing is never itself")
+    print("  captured, so ground truth only arrives if that uid later appears in a NAMED listing.")
+    print("  Most never will, and the ones that do are biased: a player who sometimes lists openly")
+    print("  is not a player who always hides. Accuracy here is a LOWER BOUND, not a measurement.")
+    print("  Ownership can also change between the sale and the later capture, which counts as a")
+    print("  contradiction even when the inference was right at the time.")
+    print()
+    print("  The control row is the point of comparison. A direct capture should be ~100%; if it is")
+    print("  not, the ground truth itself is unreliable and no band above it means anything.")
+    print()
+    print("  If the top band is not materially better than the bottom, the score is not earning its")
+    print("  complexity and should be DELETED rather than tuned.")
+
+
 async def show_calibration() -> None:
     """How often AH-inferred ownership would have been RIGHT, by evidence age AND by source.
 
@@ -701,7 +789,7 @@ async def cli(argv=None) -> int:
     p = argparse.ArgumentParser(prog="ah_scrape", description="Torn auction house scraper")
     p.add_argument("mode",
                    choices=["forward", "backfill", "probe", "status", "coverage", "calibrate",
-                            "match", "schema", "reindex"],
+                            "verdict", "match", "schema", "reindex"],
                    nargs="?", default="forward")
     p.add_argument("--no-match", action="store_true",
                    help="forward: skip the match step that normally follows the scrape")
@@ -735,7 +823,7 @@ async def cli(argv=None) -> int:
             await show_status()
             return 0
 
-        if args.mode in ("coverage", "calibrate", "match"):
+        if args.mode in ("coverage", "calibrate", "verdict", "match"):
             # Need the main database too. coverage/calibrate only read it; match writes the
             # resolved rows. No keys, no API calls either way.
             await db.init_db()
@@ -744,6 +832,8 @@ async def cli(argv=None) -> int:
                     await show_coverage()
                 elif args.mode == "calibrate":
                     await show_calibration()
+                elif args.mode == "verdict":
+                    await show_verdict()
                 else:
                     print(json.dumps(await run_match()))
             finally:
