@@ -381,7 +381,12 @@ With `/anonmatch` on (silent by default), a gear sale whose seller was inferred 
 posts with its provenance stated:
 
 > 🕵️ **Anon match** — seller inferred from the auction house: Buyer4242 won this item for
-> $9,000,000 3d ago · ~88% likely correct
+> $9,000,000 3 days ago · ~88% likely correct
+
+Every part of that line is always present — buyer, price, when, and the measured confidence.
+Dropping any of them hides precisely the cases worth doubting. The date is a live Discord
+timestamp taken from the win itself, so it stays correct as the embed ages in the channel (the
+stored `age_days` froze at match time, which drifts by however long the listing then sat).
 
 Three precedence rules govern it, and each one is a way to blame the wrong player:
 
@@ -394,6 +399,31 @@ Three precedence rules govern it, and each one is a way to blame the wrong playe
 
 The reconcile tally gains an `auction` bucket alongside `uid` and `anon`, so the inferred path can
 be judged on its own hit rate rather than by feel.
+
+**The evidence is captured when the uid is attributed, not looked up when the alert fires.**
+`anon_matches` is rebuilt wholesale by every scrape and a uid leaves the candidate set the moment
+it is attributed, so by the time the listing vanishes — hours later — the row is often gone. The
+alert then degraded to *"seller inferred from the auction house: this player won this item"*: no
+buyer, no price, no date, no confidence, in exactly the cases where you most need to judge the
+claim. It now stores the evidence alongside the tracked uid and re-reads only the **policy** (mode
+and ping threshold), so `/anonmatch silent` still takes effect on the next alert.
+
+**An inferred seller is held to a stricter standard than a captured one**, in two places:
+
+| | captured seller | inferred seller |
+|---|---|---|
+| acted within the de-list window | posted, tagged `⚠️ Likely de-list` (`/delist` decides) | **never posted** |
+| profile lookup returned nothing | posted without the guard | **never posted** |
+
+The asymmetry is the point. For a seller we watched list the item, a recent action is a caveat
+worth showing you. For one we never saw list anything, it is a competing explanation for the whole
+alert — and a likelier one, since the item vanishing while they were active is better explained by
+them pulling their own listing. Two unknowns stacked is not an alert, it is a guess.
+
+The profile lookup is retried once before giving up, since it is also what supplies the name and
+the last action. Both now always appear: the seller falls back to the name on the AH win rather
+than a bare user id, and an unknown last action prints as `*unknown*` rather than the line silently
+disappearing — a missing line reads as "nothing to report" rather than "we could not find out".
 
 ### Searching by bonus (`reindex`)
 

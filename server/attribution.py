@@ -61,6 +61,12 @@ class Attribution:
     confidence: Optional[float] = None
     silent: bool = False              # post the alert, but without a ping
     reason: str = ""
+    # What the claim rests on, captured NOW. The alert fires hours later against a table that is
+    # recomputed wholesale on every scrape, so a uid that has since left the candidate set no longer
+    # has a row to look up — and the alert would then describe its own reasoning as "this player won
+    # this item", with no price, no date and no confidence. Evidence is a snapshot; only the POLICY
+    # (mode, threshold) is re-read at alert time.
+    evidence: Optional[Dict[str, Any]] = None
 
     @property
     def matched(self) -> bool:
@@ -109,6 +115,7 @@ async def resolve(uid, uid_map: Dict[str, Any], *, item_label: Optional[str] = N
         confidence=float(match.get("confidence") or 0.0),
         silent=decision["silent"],
         reason=decision["reason"],
+        evidence=dict(match),
     )
 
 
@@ -163,15 +170,21 @@ async def decide_anon(match: Optional[Dict]) -> Dict:
             "reason": f"confidence {confidence:.2f} < {threshold:.2f} — posting without a ping"}
 
 
-async def silence_for(source: Optional[str], uid) -> tuple:
-    """-> (anon_match_row, silent). The alert path's half of the same question.
+async def silence_for(source: Optional[str], uid, evidence: Optional[Dict] = None) -> tuple:
+    """-> (evidence_row, silent). The alert path's half of the same question.
 
-    It re-reads rather than being handed the Attribution because the two are separated by a
-    database and an unbounded amount of time: the uid is attributed during one poll and the sale
-    fires whenever the listing vanishes, hours later. Re-deriving means the mode and threshold in
-    force are the ones at ALERT time, which is what an operator changing `/anonmatch` expects.
+    Evidence and policy are treated differently on purpose:
+
+    * **Evidence** — who won it, for how much, when, and how likely that is to be right — is
+      whatever was true when the uid was attributed. It is passed in, because `anon_matches` is
+      rebuilt wholesale by every scrape and the row may simply not exist by the time the sale
+      fires. Looking it up again is how the alert ended up saying "this player won this item".
+    * **Policy** — the mode and the ping threshold — is re-read, so an operator who just ran
+      `/anonmatch silent` sees it take effect on the NEXT alert rather than the one after.
+
+    The lookup is kept only as a fallback for rows attributed before evidence was stored.
     """
     if source != AUCTION or not uid:
         return None, False
-    match = await db.get_anon_match(uid)
+    match = evidence or await db.get_anon_match(uid)
     return match, (await decide_anon(match))["silent"]

@@ -199,7 +199,7 @@ async def _duplicate_from_other_path(seller_id, item_id, unit_price, qty, listin
 
 
 async def on_sale(*, seller_id, item_id, item_name, qty, unit_price, listing_id=None, bot=None,
-                  stats=None, attribution=None, uid=None) -> None:
+                  stats=None, attribution=None, uid=None, evidence=None) -> None:
     """Shared sale handler used by BOTH the WS path and the API poller: record the sale,
     (re)enrich the seller, then alert if the accumulated mug clears threshold."""
     log.info("SALE detected: seller=%s item=%s(%s) qty=%s unit=%s total=%s listing=%s",
@@ -229,7 +229,7 @@ async def on_sale(*, seller_id, item_id, item_name, qty, unit_price, listing_id=
             seller_id, seller, bot,
             last_item={"item_id": item_id, "item_name": item_name, "stats": stats},
             sale_id=sale_id, listing_id=listing_id, t0=t0,
-            attribution=attribution, uid=uid,
+            attribution=attribution, uid=uid, evidence=evidence,
         )
 
 
@@ -248,7 +248,7 @@ async def _mug_for(seller: Optional[Dict], total: int):
 
 async def _evaluate_alert(seller_id, seller: Optional[Dict], bot, last_item=None,
                           sale_id=None, listing_id=None, t0=None,
-                          attribution=None, uid=None) -> None:
+                          attribution=None, uid=None, evidence=None) -> None:
     window = await _cfg("sale_window_seconds", config.SALE_WINDOW_SECONDS)
     win = await db.seller_window(seller_id, window)
     if win["total"] <= 0:
@@ -264,7 +264,25 @@ async def _evaluate_alert(seller_id, seller: Optional[Dict], bot, last_item=None
     # last_action + TBS. last_action drives the banking decay; status drives hold + embed colour.
     _enrich_t = time.monotonic()
     seller = await enrich_seller(seller_id, _http(), force=True)
+    # The profile is what supplies the name, the last action and therefore the de-list guard. When
+    # it fails we are not merely missing decoration: we cannot tell a sale from the seller pulling
+    # their own listing. Retry once — this is a single call on a path that only runs when an alert
+    # is already about to fire, so the latency is affordable and the alternative is a wrong post.
+    if not (seller or {}).get("last_action_ts"):
+        log.warning("mug-eval seller=%s: profile gave no last_action — retrying once", seller_id)
+        seller = await enrich_seller(seller_id, _http(), force=True) or seller
     enrich_secs = time.monotonic() - _enrich_t
+
+    # An INFERRED seller with no profile is not postable. The claim is already "they won this at
+    # auction and nothing since says otherwise"; without a last action we also cannot rule out the
+    # far likelier explanation that they simply pulled their own listing. Two unknowns stacked is
+    # not an alert, it is a guess.
+    if attribution == "auction" and not (seller or {}).get("last_action_ts"):
+        log.info("mug-eval seller=%s: inferred seller and no profile data -> dropping (cannot "
+                 "apply the de-list guard to an inference)", seller_id)
+        if sale_id is not None:
+            await db.delete_sale(sale_id)
+        return
     # Delist guard for GEAR: if the seller acted right around when their item vanished, it's almost
     # certainly them pulling/relisting/trading it, not a buy. Drop the phantom sale so it neither
     # fires a $0 mug nor inflates the window.
@@ -293,9 +311,14 @@ async def _evaluate_alert(seller_id, seller: Optional[Dict], bot, last_item=None
     tag_secs = await _cfg("delist_tag_seconds", config.DELIST_TAG_SECONDS)
     delist_mode = (await _cfg("delist_mode", config.DELIST_MODE) or "ping")
     delist_secs = _delist_active_secs(seller, listing_id, tag_secs)
-    if delist_secs is not None and delist_mode == "off":
-        log.info("mug-eval seller=%s: likely de-list (acted %ss ago) + mode=off -> drop, no alert",
-                 seller_id, delist_secs)
+    # For an INFERRED seller the de-list mode does not get a vote. `ping`/`silent` are a judgement
+    # call about a seller we actually observed listing the item — worth showing you, tagged, so you
+    # can decide. Here we never saw them list anything, so a recent last action is not a caveat on
+    # the alert: it is a competing explanation for the entire thing, and a likelier one.
+    if delist_secs is not None and (delist_mode == "off" or attribution == "auction"):
+        log.info("mug-eval seller=%s: likely de-list (acted %ss ago) + %s -> drop, no alert",
+                 seller_id, delist_secs,
+                 "inferred seller" if attribution == "auction" else "mode=off")
         if sale_id is not None:
             await db.delete_sale(sale_id)   # also remove the phantom from the value window
         return
@@ -327,7 +350,7 @@ async def _evaluate_alert(seller_id, seller: Optional[Dict], bot, last_item=None
     hospitalize = await _is_hospitalize_faction(seller)
     # An inferred seller was never observed selling anything — they won this uid at auction and
     # nothing since says they parted with it. Its own mode decides whether that is worth a ping.
-    anon_match, silent_anon = await silence_for(attribution, uid)
+    anon_match, silent_anon = await silence_for(attribution, uid, evidence)
     silent = bool((delist_secs is not None and delist_mode == "silent") or hosp_far or silent_anon)
     log.info("mug-eval seller=%s: POST alert variant=%s value=%s hospitalize=%s delist=%s mode=%s silent=%s",
              seller_id, variant, win["total"], hospitalize,
@@ -506,7 +529,11 @@ def _build_event(seller_id, seller: Optional[Dict], win: Dict, res, *, variant="
     return {
         "variant": variant,
         "seller_id": seller_id,
-        "seller_name": seller.get("name") or str(seller_id),
+        # A bare numeric id in the embed is useless — you cannot recognise a target from it. The
+        # profile is the good source; the AH win is a fallback that names the same player, since it
+        # is where this seller came from in the first place.
+        "seller_name": (seller.get("name") or (anon_match or {}).get("buyer_name")
+                        or str(seller_id)),
         "item_id": headline.get("item_id"),
         "item_name": headline.get("item_name"),
         "item_stats": headline.get("stats"),
