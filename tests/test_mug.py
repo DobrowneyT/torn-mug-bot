@@ -46,16 +46,46 @@ def test_handles_none_and_negative():
     assert r2.mug_min == 0 and r2.mug_max == 0
 
 
-def test_bank_adjusted_total_decays_with_activity():
-    from server import mug
+def test_a_sale_the_seller_has_been_online_since_is_dropped_not_discounted():
+    """The rule that replaced a linear decay. Under the decay a sale from 9 minutes ago still
+    carried ~60% of its value, which is how hospital alerts kept quoting hundreds of millions of
+    already-banked cash. Banking is not gradual: they either went to the bank or they didn't, and
+    every second of activity after the sale is a chance they did."""
     now = 1_000_000
     sales = [
-        {"total_value": 100, "sold_at": now},          # last action right at the sale -> full
-        {"total_value": 100, "sold_at": now - 3600},   # active 1h after -> partial
-        {"total_value": 100, "sold_at": now - 99999},  # active long after -> ~0 (banked)
+        {"total_value": 100, "sold_at": now},           # sold at their last action -> still on hand
+        {"total_value": 100, "sold_at": now - 400},     # active ~7m after -> banked
+        {"total_value": 100, "sold_at": now - 99999},   # active long after -> banked
     ]
-    # grace 15m, assume 6h
-    total = mug.bank_adjusted_total(sales, last_action_ts=now, grace=900, assume=21600)
-    assert 100 <= total < 250            # first full, second partial, third ~0
-    # No last_action info -> count everything.
+    on_hand, banked = mug.split_banked(sales, last_action_ts=now, grace=180)
+    assert [s["sold_at"] for s in on_hand] == [now]
+    assert len(banked) == 2
+    assert mug.bank_adjusted_total(sales, last_action_ts=now, grace=180) == 100
+
+
+def test_the_grace_covers_clock_skew_only():
+    """`sold_at` is when the poller SAW the listing vanish, not when the buyer clicked, so an action
+    a minute either side of the sale is noise rather than a trip to the bank."""
+    now = 1_000_000
+    inside = [{"total_value": 100, "sold_at": now - 179}]
+    outside = [{"total_value": 100, "sold_at": now - 181}]
+    assert mug.bank_adjusted_total(inside, last_action_ts=now, grace=180) == 100
+    assert mug.bank_adjusted_total(outside, last_action_ts=now, grace=180) == 0
+
+
+def test_no_last_action_drops_nothing():
+    """An assumption that deletes the entire value of an alert needs evidence behind it. Not knowing
+    when someone last acted is not evidence that they banked."""
+    sales = [{"total_value": 100, "sold_at": 1}, {"total_value": 200, "sold_at": 2}]
+    on_hand, banked = mug.split_banked(sales, last_action_ts=None)
+    assert banked == [] and len(on_hand) == 2
     assert mug.bank_adjusted_total(sales, last_action_ts=None) == 300
+
+
+def test_the_split_is_a_clean_cut_in_time():
+    """Relied on by the caller: every banked sale is older than every kept one, so claiming the
+    newest banked sale can never swallow one we are still alerting on."""
+    now = 1_000_000
+    sales = [{"total_value": 1, "sold_at": now - t} for t in (5000, 900, 300, 100, 0)]
+    on_hand, banked = mug.split_banked(sales, last_action_ts=now, grace=180)
+    assert max(s["sold_at"] for s in banked) < min(s["sold_at"] for s in on_hand)

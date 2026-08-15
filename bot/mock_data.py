@@ -23,10 +23,13 @@ def mock_mug_event(now: int = None) -> Dict:
         "mug_min": 2_274_414,
         "mug_max": 6_823_243,
         "tbs": 9_960_000_000,
-        "last_action_ts": now - 2 * 3600,
+        # Both sales are AFTER the last action, which is the only shape a real alert can have: any
+        # sale the seller has been online since is dropped as banked before the embed is built, so a
+        # fixture with old sales under a recent last action depicts an event that cannot occur.
+        "last_action_ts": now - 95 * 60,
         "online_status": "Online",        # -> green border
         "status_state": "Okay",
-        "detected_ts": now - 16 * 3600,
+        "detected_ts": now - 20 * 60,
         "faction": "ARKHAM A$YLUM",
         "in_clothing_store": False,
         # The triggering sale IS in the window, so the headline item appears here too — that is
@@ -34,9 +37,9 @@ def mock_mug_event(now: int = None) -> Dict:
         # item_id is what lets the list link to the market.
         "sales": [
             {"item_id": 206, "item_name": "Xanax", "qty": 1, "price": 488_286,
-             "ts": now - 20 * 3600},
+             "ts": now - 80 * 60},
             {"item_id": 225, "item_name": "Mag 7", "qty": 1, "price": 45_000_000,
-             "ts": now - 16 * 3600},
+             "ts": now - 20 * 60},
         ],
     }
 

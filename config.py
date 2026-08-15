@@ -333,15 +333,16 @@ SALE_DEDUP_SECONDS = int(os.environ.get("MUG_SALE_DEDUP_SECONDS", "180"))   # ~3
 # "claimed" and never counted again — this stops the window from re-counting the same sales across
 # alerts (e.g. a later hospital alert re-listing the Donator Packs from the first alert).
 MUG_CLAIM_ON_ALERT = (os.environ.get("MUG_CLAIM_ON_ALERT", "true") or "").strip().lower() in ("1", "true", "yes")
-# Banking assumption: a sale's muggable value decays as the seller stays ACTIVE after it (they've
-# had time to bank). Full value if they went quiet within GRACE of the sale; zero once they've been
-# active ASSUME seconds past it; linear in between. (Uses the seller's last_action time.)
-# Tightened 2026-06-28: the old 15m/6h horizon barely decayed anything — a seller active 17min after
-# a sale still kept ~99% weight, so stale already-banked sales (e.g. COLDCHAIN's 18-min-old TMP+P90)
-# inflated the window over threshold and fired $0 "mugs". 3m full-credit, fully banked by 18m-active
-# encodes "if they've been online a while since selling, the cash is in their wallet, not muggable".
+# Banking assumption: any sale the seller has been ACTIVE since is assumed banked and is dropped
+# from the window outright. (Uses the seller's last_action time.)
+# 2026-06-28: replaced a 15m/6h linear decay that barely decayed anything — a seller active 17min
+# after a sale still kept ~99% weight, so stale already-banked sales (e.g. COLDCHAIN's 18-min-old
+# TMP+P90) inflated the window over threshold and fired $0 "mugs".
+# 2026-08-15: the graded version went too, for the same reason one step down: a 9-minute-old sale
+# still carried ~60% and kept posting hospital alerts on cash that was long gone.
+# GRACE is skew only — `sold_at` is when the poller saw the listing vanish, not when it sold — so it
+# stays small. It is NOT a "they probably haven't banked yet" allowance.
 MUG_BANK_GRACE_SECONDS = int(os.environ.get("MUG_BANK_GRACE_SECONDS", str(3 * 60)))      # 3m
-MUG_BANK_ASSUME_SECONDS = int(os.environ.get("MUG_BANK_ASSUME_SECONDS", str(18 * 60)))   # 18m
 # Don't re-alert the same seller more often than this (they keep accumulating meanwhile).
 ALERT_COOLDOWN_SECONDS = 60 * 10     # 10m
 # Clothing-store (job) + BSP are slow-changing — refresh once a day. (Company job perks only
