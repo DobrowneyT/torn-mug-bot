@@ -296,3 +296,124 @@ def test_anonymous_listing_never_alerts(tmp_path, monkeypatch):
         await db.close_db()
 
     asyncio.run(scenario())
+
+
+# ------------------------- banked sales leave the window entirely -------------------------
+
+def _banking_seller(monkeypatch, last_action_ts):
+    async def fake_enrich(uid, client, force=False):
+        await db.update_seller_enrichment(uid, {"status_state": "Okay", "online_status": "Offline",
+                                                "last_action_ts": last_action_ts})
+        return await db.get_seller(uid)
+
+    monkeypatch.setattr(detection, "enrich_seller", fake_enrich)
+
+
+def test_sales_older_than_the_last_action_do_not_reach_the_embed(tmp_path, monkeypatch):
+    """The reported case: a hospital alert quoting $459M across five sales, every one of them made
+    before the seller's last action. That money is in the bank.
+
+    The list has to shrink with the total. Deducting the value while still itemising the sales
+    underneath it produces an embed that argues with itself, and the reader has no way to tell
+    which half to believe."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "bank1.db"))
+    now = int(time.time())
+    _banking_seller(monkeypatch, now - 540)          # last action 9 minutes ago
+
+    async def scenario():
+        await db.init_db()
+        await db.set_config("min_mug_value", 1)
+        await db.upsert_seller_seen(user_id=80, name="Banker")
+        for ago, price in ((6 * 3600, 108_999_995), (5 * 3600, 109_899_000), (49 * 60, 139_500_000)):
+            await db.record_sale(listing_id=f"uid:{ago}", item_id=399, item_name="AK", seller_id=80,
+                                 qty_sold=1, unit_price=price, sold_at=now - ago)
+        sid = await db.record_sale(listing_id="uid:new", item_id=399, item_name="AK", seller_id=80,
+                                   qty_sold=1, unit_price=20_000_000, sold_at=now - 60)
+        bot = FakeBot()
+        await detection._evaluate_alert(80, await db.get_seller(80), bot,
+                                        last_item={"item_id": 399, "item_name": "AK"}, sale_id=sid)
+
+        assert len(bot.alerts) == 1
+        a = bot.alerts[0]
+        assert a["value_change"] == 20_000_000, "banked sales still counted toward the headline"
+        assert a["num_sales"] == 1
+        assert [s["price"] for s in a["sales"]] == [20_000_000], "a banked sale was still itemised"
+        await db.close_db()
+
+    asyncio.run(scenario())
+
+
+def test_a_window_of_nothing_but_banked_sales_does_not_alert_and_is_claimed(tmp_path, monkeypatch):
+    """Every sale predates the last action, so there is nothing to mug. Claiming matters as much as
+    not posting: last_action only moves forward, so this window can never become muggable again, and
+    left unclaimed it would force a fresh profile call on every later sale to learn that again."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "bank2.db"))
+    now = int(time.time())
+    _banking_seller(monkeypatch, now - 60)           # acted a minute ago, sold long before
+
+    async def scenario():
+        await db.init_db()
+        await db.set_config("min_mug_value", 1)
+        await db.upsert_seller_seen(user_id=81, name="AllBanked")
+        for ago in (3600, 1800):
+            await db.record_sale(listing_id=f"uid:{ago}", item_id=399, item_name="AK", seller_id=81,
+                                 qty_sold=1, unit_price=500_000_000, sold_at=now - ago)
+        bot = FakeBot()
+        await detection._evaluate_alert(81, await db.get_seller(81), bot,
+                                        last_item={"item_id": 399, "item_name": "AK"})
+        assert bot.alerts == []
+        assert (await db.seller_window(81, 7200))["total"] == 0, "the dead window was left to re-check"
+        await db.close_db()
+
+    asyncio.run(scenario())
+
+
+def test_an_offline_seller_keeps_every_sale(tmp_path, monkeypatch):
+    """The other half of the rule, and the one that matters for false negatives: a seller who has
+    NOT acted since selling has had no chance to bank, so the full window stands."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "bank3.db"))
+    now = int(time.time())
+    _banking_seller(monkeypatch, now - 4 * 3600)     # last action BEFORE both sales
+
+    async def scenario():
+        await db.init_db()
+        await db.set_config("min_mug_value", 1)
+        await db.upsert_seller_seen(user_id=82, name="Sleeper")
+        for ago in (1800, 600):
+            await db.record_sale(listing_id=f"uid:{ago}", item_id=399, item_name="AK", seller_id=82,
+                                 qty_sold=1, unit_price=100_000_000, sold_at=now - ago)
+        bot = FakeBot()
+        await detection._evaluate_alert(82, await db.get_seller(82), bot,
+                                        last_item={"item_id": 399, "item_name": "AK"})
+        assert len(bot.alerts) == 1
+        assert bot.alerts[0]["value_change"] == 200_000_000
+        assert bot.alerts[0]["num_sales"] == 2
+        await db.close_db()
+
+    asyncio.run(scenario())
+
+
+def test_alerting_claims_the_banked_sales_too(tmp_path, monkeypatch):
+    """A banked sale that stays in the table is re-read by the raw pre-check of every future window,
+    where it can only ever be dropped again — and until then it makes the seller look richer than
+    they are to the cheap threshold check."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "bank4.db"))
+    now = int(time.time())
+    _banking_seller(monkeypatch, now - 900)
+
+    async def scenario():
+        await db.init_db()
+        await db.set_config("min_mug_value", 1)
+        await db.upsert_seller_seen(user_id=83, name="Mixed")
+        await db.record_sale(listing_id="uid:old", item_id=399, item_name="AK", seller_id=83,
+                             qty_sold=1, unit_price=300_000_000, sold_at=now - 3600)
+        await db.record_sale(listing_id="uid:new", item_id=399, item_name="AK", seller_id=83,
+                             qty_sold=1, unit_price=50_000_000, sold_at=now - 120)
+        bot = FakeBot()
+        await detection._evaluate_alert(83, await db.get_seller(83), bot,
+                                        last_item={"item_id": 399, "item_name": "AK"})
+        assert len(bot.alerts) == 1 and bot.alerts[0]["value_change"] == 50_000_000
+        assert (await db.seller_window(83, 7200))["count"] == 0, "the banked sale survived the claim"
+        await db.close_db()
+
+    asyncio.run(scenario())

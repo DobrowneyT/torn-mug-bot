@@ -47,24 +47,34 @@ def compute_mug(
     return MugResult(mug_min=mug_min, mug_max=mug_max, clothing_mult=cm, qualifies=mug_min >= min_value)
 
 
-def bank_adjusted_total(sales, last_action_ts, *, grace=None, assume=None) -> int:
-    """Discount each sale by how long the seller stayed ACTIVE after it — they've had time to bank
-    the cash. Full value if they went quiet within `grace` of the sale; zero once they've been
-    active `assume` seconds past it; linear in between. `last_action_ts` None (or assume<=grace) =>
-    no discount (count everything). Mirrors the "online since the sale ⇒ probably banked" heuristic.
+def split_banked(sales, last_action_ts, *, grace=None) -> tuple:
+    """Split a seller's window into (on_hand, banked) by their last action.
+
+    The bank is two clicks away, so a sale is only muggable until the seller next touches the game.
+    Anything they sold BEFORE their last action is assumed already deposited and is dropped
+    outright — not discounted. There is no partial credit here on purpose: the old linear decay
+    handed a sale from an hour ago some fraction of its value and kept firing $0 mugs on sellers who
+    had plainly been online since.
+
+    `grace` covers the seconds either side where "acted after the sale" is really clock skew — our
+    `sold_at` is when the poller SAW the listing vanish, not when the buyer clicked. A sale inside
+    that of the last action still counts.
+
+    No `last_action_ts` means we know nothing about whether they've been online, and an assumption
+    that deletes value needs evidence — so nothing is dropped.
+
+    The split is purely by time, so every banked sale is strictly older than every kept one.
     """
     grace = config.MUG_BANK_GRACE_SECONDS if grace is None else grace
-    assume = config.MUG_BANK_ASSUME_SECONDS if assume is None else assume
-    if not last_action_ts or assume <= grace:
-        return sum(int(s.get("total_value") or 0) for s in sales)
-    total = 0.0
-    for s in sales:
-        gap = int(last_action_ts) - int(s.get("sold_at") or 0)
-        if gap <= grace:
-            w = 1.0
-        elif gap >= assume:
-            w = 0.0
-        else:
-            w = 1.0 - (gap - grace) / (assume - grace)
-        total += (s.get("total_value") or 0) * w
-    return int(round(total))
+    if not last_action_ts:
+        return list(sales), []
+    cutoff = int(last_action_ts) - int(grace)
+    on_hand = [s for s in sales if int(s.get("sold_at") or 0) >= cutoff]
+    banked = [s for s in sales if int(s.get("sold_at") or 0) < cutoff]
+    return on_hand, banked
+
+
+def bank_adjusted_total(sales, last_action_ts, *, grace=None) -> int:
+    """What of the window is still in the seller's wallet. See `split_banked`."""
+    on_hand, _ = split_banked(sales, last_action_ts, grace=grace)
+    return sum(int(s.get("total_value") or 0) for s in on_hand)

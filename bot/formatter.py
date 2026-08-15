@@ -226,8 +226,9 @@ def build_mug_alert_embed(event: Dict) -> discord.Embed:
         n = event.get("num_sales")
         suffix = f" ({n} sale{'s' if n != 1 else ''})" if n else ""
         # "Expected value" read as the sale price, which sits three lines below at a DIFFERENT
-        # number — this one is after banking decay and mug protection. Naming it for what it
-        # estimates removes the apparent contradiction.
+        # number — this one is after the banking drop and mug protection. Naming it for what it
+        # estimates removes the apparent contradiction. The Sales list below is filtered to match:
+        # it shows only the sales counted here, never one whose cash is already banked.
         lines.append(f"Expected cash on hand: **{fmt_money(event.get('value_change'))}**{suffix}")
 
     lines.append(

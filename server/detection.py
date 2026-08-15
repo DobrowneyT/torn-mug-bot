@@ -300,12 +300,19 @@ async def _evaluate_alert(seller_id, seller: Optional[Dict], bot, last_item=None
     win, res, protection_pct = await _mug_protect_adjust(seller, win)
     la = (seller or {}).get("last_action_ts")
     state = (seller or {}).get("status_state")
-    log.info("mug-eval seller=%s: raw=%s adj=%s mug=%s-%s qualifies=%s protection=%s%% "
+    banked = win.get("banked_sales") or []
+    log.info("mug-eval seller=%s: raw=%s adj=%s banked=%s/%s mug=%s-%s qualifies=%s protection=%s%% "
              "| status=%s last_action=%ss-ago online=%s",
-             seller_id, raw_total, win["total"], res.mug_min, res.mug_max, res.qualifies, protection_pct,
+             seller_id, raw_total, win["total"], len(banked), len(banked) + win["count"],
+             res.mug_min, res.mug_max, res.qualifies, protection_pct,
              state, (int(time.time()) - int(la)) if la else "?", (seller or {}).get("online_status"))
     if not res.qualifies:
-        return  # decayed below threshold — they've likely banked it
+        # Nothing left but banked sales: this window can never pay out, and last_action only moves
+        # forward, so re-checking it costs a forced profile call per later sale and reaches the same
+        # answer every time. Claim it and stop.
+        if not win["sales"] and banked:
+            await db.set_mug_claimed(seller_id, max(s["sold_at"] for s in banked))
+        return  # they've banked it, or what's left is under the threshold
 
     # Likely de-list handling (soft, configurable via /delist): a GEAR uid that vanished while the
     # seller was actively online is almost always them pulling their own listing, not a buy.
@@ -400,11 +407,20 @@ async def _is_hospitalize_faction(seller: Optional[Dict]) -> bool:
 
 
 async def _bank_adjust(seller: Optional[Dict], win: Dict):
-    """Apply the banking-decay heuristic to the window total (seller active since a sale ⇒ likely
-    banked) and recompute the mug. Returns (adjusted_win, recomputed_res)."""
-    adj_total = mug.bank_adjusted_total(win.get("sales") or [], (seller or {}).get("last_action_ts"))
-    win = {**win, "total": adj_total}
-    return win, await _mug_for(seller, adj_total)
+    """Drop every sale the seller has been ACTIVE since — that cash is in the bank and a mug cannot
+    reach it — and recompute the mug on what's left. Returns (adjusted_win, recomputed_res).
+
+    The dropped sales leave the window entirely: `total`, `count` and the `sales` list all shrink
+    together. Deducting the value while still listing the sale underneath it was the worst of both,
+    an embed whose own itemisation contradicted its headline. They are kept under `banked_sales` for
+    one reason only — so the alert can still claim them and stop re-evaluating a window that will
+    never pay out."""
+    on_hand, banked = mug.split_banked(win.get("sales") or [],
+                                       (seller or {}).get("last_action_ts"))
+    total = sum(int(s.get("total_value") or 0) for s in on_hand)
+    win = {**win, "sales": on_hand, "count": len(on_hand), "total": total,
+           "banked_sales": (win.get("banked_sales") or []) + banked}
+    return win, await _mug_for(seller, total)
 
 
 async def _mark_alerted(seller_id, win: Dict, claim: bool = True) -> None:
@@ -412,6 +428,10 @@ async def _mark_alerted(seller_id, win: Dict, claim: bool = True) -> None:
     never re-counted in a later window. claim=False keeps the window intact (used for the live
     'remind' hospital post, where the near-release reminder still needs the accumulated total)."""
     await db.set_last_alerted(seller_id)
+    # `win` here has already had its banked sales dropped, but the claim is a watermark and the
+    # bank split is a clean cut in time — every banked sale is older than every kept one — so the
+    # newest kept sale covers them all. (Nothing kept => no alert; that claim is made at the point
+    # the window is found to be dead, since we never get here.)
     sales = win.get("sales") or []
     if claim and config.MUG_CLAIM_ON_ALERT and sales:
         await db.set_mug_claimed(seller_id, max(s["sold_at"] for s in sales))
@@ -425,21 +445,19 @@ async def _cooldown_ok(seller: Optional[Dict]) -> bool:
     return (int(time.time()) - int(last)) >= cooldown
 
 
-# How long after a sale the seller can act before we assume the cash is banked (used to suppress a
-# stale hospital-release alert for someone who's been online since the sale). Small on purpose.
-_BANKED_AFTER_SALE_GRACE = 120
-
-
 def _banked_since_sales(seller: Optional[Dict], win: Dict) -> Optional[int]:
-    """If the seller's most recent action is well AFTER their most recent sale in the window, they've
-    been online since selling and have almost certainly stashed the cash in their wallet (can't be
-    mugged). Returns the seconds-active-since-the-sale if so, else None. Offline/old sellers (last
-    action before the sale) return None — they haven't had the chance, so they stay muggable."""
-    la = (seller or {}).get("last_action_ts")
-    latest_sale = max((int(s.get("sold_at") or 0) for s in (win.get("sales") or [])), default=0)
-    if la and latest_sale and int(la) > latest_sale + _BANKED_AFTER_SALE_GRACE:
-        return int(la) - latest_sale
-    return None
+    """The whole window is banked: the seller has acted since even their NEWEST sale, so there is
+    nothing left for a hospital-release alert to be about. Returns the seconds they were active for
+    after that last sale, else None (an offline seller hasn't had the chance, so they stay muggable).
+
+    Same rule and same grace as `_bank_adjust` — this is only the all-of-it case, worth answering
+    early because it lets the caller claim the window and stop re-checking it."""
+    on_hand, banked = mug.split_banked(win.get("sales") or [],
+                                       (seller or {}).get("last_action_ts"))
+    if on_hand or not banked:
+        return None
+    newest = max(int(s.get("sold_at") or 0) for s in banked)
+    return int((seller or {}).get("last_action_ts")) - newest
 
 
 async def post_hospital_due(bot) -> None:
