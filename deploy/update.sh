@@ -2,8 +2,13 @@
 # Pull the latest code onto this box and restart the bot.
 #
 #   ./deploy/update.sh                # pull + deps + backup + restart + verify
-#   ./deploy/update.sh --if-changed   # exit quietly unless origin moved (this is what cron runs)
+#   ./deploy/update.sh --if-changed   # cron: quiet unless origin has moved since the last
+#                                     #   SUCCESSFUL deploy (not since the last pull — see marker)
 #   SKIP_BACKUP=1 ./deploy/update.sh  # skip the pre-restart safety dump
+#
+# To force a redeploy of the current checkout — the recovery path after an interrupted run — drop
+# the flag. Detached, so a dropped connection cannot kill it half-way:
+#   setsid nohup ./deploy/update.sh >> /var/log/mug-bot-deploy.log 2>&1 &
 #
 # Deploys whatever branch this checkout is ON. Pull-based on purpose: the box asks GitHub for
 # changes rather than CI pushing to the box, so no credentials to this machine live anywhere off it.
@@ -19,10 +24,11 @@ set -euo pipefail
 # updates its own file mid-execution, and bash reads scripts lazily, so a top-level body could be
 # corrupted by the very `git merge` it just performed.
 main() {
-  local repo_dir env_file branch local_sha remote_sha
+  local repo_dir env_file branch local_sha remote_sha marker deployed_sha
   repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   cd "$repo_dir"
   env_file="$repo_dir/.env"
+  marker="$repo_dir/.last-deployed"
 
   # One deploy at a time — a 5-minute cron must never overlap a slow run (pip, a cold restart).
   exec 9>"/tmp/mug-bot-update.lock"
@@ -41,7 +47,15 @@ main() {
 
   # Nothing to do: exit before any other check, so a cron run stays silent and a dirty tree on an
   # up-to-date box isn't reported as a failure every five minutes.
-  if [ "${1:-}" = "--if-changed" ] && [ "$local_sha" = "$remote_sha" ]; then
+  #
+  # ⚠️ Compared against what was last successfully DEPLOYED, not against HEAD. The merge below
+  # happens before the deps, the backup and the restart, so an interrupted run (a closed SSH
+  # session is the usual way) leaves HEAD already equal to origin with none of the work done — and
+  # a HEAD-based guard would then answer "nothing to do" forever, silently, with the box left on
+  # the old code. This cost the dashboard box five hours on 2026-08-15. An absent marker reads as
+  # "never deployed", so the first run after this change deploys once and re-arms the mechanism.
+  deployed_sha="$(cat "$marker" 2>/dev/null || true)"
+  if [ "${1:-}" = "--if-changed" ] && [ "$deployed_sha" = "$remote_sha" ]; then
     exit 0
   fi
 
@@ -96,7 +110,11 @@ main() {
   echo "==> restarting $service"
   sudo systemctl restart "$service"
 
+  # Only reached when wait_ready succeeded — it returns non-zero otherwise and `set -e` stops the
+  # script here, deliberately leaving the marker stale so the next cron tick retries. A broken
+  # deploy that repeats loudly beats one that marks itself done and goes quiet.
   wait_ready "$port" "$service"
+  git rev-parse HEAD > "$marker"
   echo "==> deployed $(git rev-parse --short HEAD) ($(date -u +%FT%TZ))"
 }
 

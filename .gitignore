@@ -15,3 +15,8 @@ bot/state.json.*
 scratch/dumps/
 # userscripts/ ARE tracked here, with the market-tracker wsToken scrubbed to a
 # placeholder. Paste your own token locally and DON'T commit it.
+# Which commit this BOX last successfully deployed. Written by deploy/update.sh
+# and compared by --if-changed, so an interrupted deploy retries on the next
+# cron tick instead of leaving the box quietly stuck on old code. Per-machine
+# state: it describes a server, not the code.
+.last-deployed
