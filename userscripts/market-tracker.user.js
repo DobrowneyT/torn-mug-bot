@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Market Tracker for Mug Bot
-// @version      5.4
+// @version      5.5
 // @description  Track market updates and forward to mug bot server
 // @author       MonChoon
 // @match        https://www.torn.com/page.php?sid=ItemMarket*
@@ -46,7 +46,7 @@
         if (next === null) return;
         const trimmed = next.trim().replace(/\/+$/, '');
         if (trimmed && !/^https?:\/\//.test(trimmed)) {
-            alert('That does not look like a URL — it needs to start with http:// or https://');
+            alert('That does not look like a URL \u2014 it needs to start with http:// or https://');
             return;
         }
         if (trimmed) {
@@ -127,7 +127,7 @@
         let toggleButton = document.createElement('button');
         toggleButton.id = 'mt-toggle-btn';
         toggleButton.classList.add('torn-btn');
-        toggleButton.textContent = trackingEnabled ? '📡 Tracking ON' : '🚫 Tracking OFF';
+        toggleButton.textContent = trackingEnabled ? '\uD83D\uDCE1 Tracking ON' : '\uD83D\uDEAB Tracking OFF';
         toggleButton.style.cssText = `
             background: ${trackingEnabled ? 'var(--default-green-btn)' : 'var(--default-red-btn)'};
             color: white;
@@ -185,7 +185,7 @@
         let statusIndicator = document.getElementById('mt-status-indicator');
 
         if (toggleBtn) {
-            toggleBtn.textContent = trackingEnabled ? '📡 Tracking ON' : '🚫 Tracking OFF';
+            toggleBtn.textContent = trackingEnabled ? '\uD83D\uDCE1 Tracking ON' : '\uD83D\uDEAB Tracking OFF';
             toggleBtn.style.background = trackingEnabled ? 'var(--default-green-btn)' : 'var(--default-red-btn)';
         }
 
@@ -265,7 +265,7 @@
         wsToken = (v || '').trim();
         updateToggleUI();
         if (wsToken) handleCategoryWebSocket();   // resolved after page load — connect now
-        else console.warn('[MARKET TRACKER] no WebSocket token set — nothing will be tracked. ' +
+        else console.warn('[MARKET TRACKER] no WebSocket token set \u2014 nothing will be tracked. ' +
                           'Userscript menu -> "Set Torn WebSocket token".');
     });
 

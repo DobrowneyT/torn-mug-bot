@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TORN Auction Price Checker (MonChoon AH DB)
 // @namespace    https://torn.com/
-// @version      4.1.3-ahdb.1
+// @version      4.1.3-ahdb.2
 // @description  Check historical prices for similar auction items, served from a self-hosted AH database
 // @author       WinterValor [3945658]
 // @match        https://www.torn.com/amarket.php*
@@ -1244,13 +1244,13 @@
             }
             const token = prompt(
                 'API token for ' + url.trim() + '\n\n' +
-                '(AH_API_TOKEN from the server\'s .env — the same value for everyone who uses ' +
+                '(AH_API_TOKEN from the server\'s .env \u2014 the same value for everyone who uses ' +
                 'that server. Stored in this userscript manager only, and never sent anywhere ' +
                 'else.)',
                 ''
             );
             if (token === null || token.trim() === '') {
-                alert('No token given — the AH DB requires one, so the original public backend ' +
+                alert('No token given \u2014 the AH DB requires one, so the original public backend ' +
                       'will be used. Re-run "Configure AH DB backend" from the userscript menu ' +
                       'to change this.');
                 GM_setValue(CONFIG.BACKEND_KEY, 'upstream');
@@ -1315,7 +1315,7 @@
                     }
                 },
                 onerror: () => reject(new Error(ahdb
-                    ? `cannot reach ${backend.label()} — is the server up?`
+                    ? `cannot reach ${backend.label()} \u2014 is the server up?`
                     : 'Network error')),
                 ontimeout: () => reject(new Error('Request timeout'))
             });
@@ -1326,13 +1326,13 @@
      *  fixed by the operator, and none of them are visible from the message the server sends. */
     function describeApiError(status, data, ahdb) {
         if (ahdb && status === 401) {
-            return 'token rejected — reconfigure from the userscript menu';
+            return 'token rejected \u2014 reconfigure from the userscript menu';
         }
         if (ahdb && status === 503) {
             return 'AH DB API is disabled (AH_API_TOKEN unset in the server\'s .env)';
         }
         if (status === 429) {
-            return 'rate limited — wait a moment';
+            return 'rate limited \u2014 wait a moment';
         }
         return (data && data.error) || `API error (${status})`;
     }
@@ -1831,12 +1831,12 @@
                             <p class="ah-item-name">${a.item_name}</p>
                             <p class="ah-item-meta">
                                 Quality: ${a.stat_quality?.toFixed(1) || '?'}%
-                                ${a.stat_damage ? ' · DMG: ' + a.stat_damage.toFixed(1) : ''}
-                                ${a.stat_accuracy ? ' · ACC: ' + a.stat_accuracy.toFixed(1) : ''}
-                                ${a.stat_armor ? ' · Armor: ' + a.stat_armor.toFixed(1) : ''}
+                                ${a.stat_damage ? ' \u00B7 DMG: ' + a.stat_damage.toFixed(1) : ''}
+                                ${a.stat_accuracy ? ' \u00B7 ACC: ' + a.stat_accuracy.toFixed(1) : ''}
+                                ${a.stat_armor ? ' \u00B7 Armor: ' + a.stat_armor.toFixed(1) : ''}
                             </p>
                             ${bonusHtml ? `<div class="ah-item-bonuses">${bonusHtml}</div>` : ''}
-                            <p class="ah-players">Seller: ${sellerLink} · Buyer: ${buyerLink}</p>
+                            <p class="ah-players">Seller: ${sellerLink} \u00B7 Buyer: ${buyerLink}</p>
                         </div>
                         <div class="ah-item-right">
                             <p class="ah-price">${formatPrice(a.price)}</p>
@@ -1931,9 +1931,9 @@
         const onAhdb = backend.isAhdb();
         const msg = onAhdb
             ? `Results are coming from your AH DB at ${backend.url()}.\n\n` +
-              'OK — reconfigure the address/token\nCancel — switch to the original public backend'
+              'OK \u2014 reconfigure the address/token\nCancel \u2014 switch to the original public backend'
             : 'Results are coming from the original public backend.\n\n' +
-              'OK — point this script at your AH DB\nCancel — stay on the public backend';
+              'OK \u2014 point this script at your AH DB\nCancel \u2014 stay on the public backend';
         if (confirm(msg)) {
             backend.reconfigure();
         } else if (onAhdb) {
@@ -2067,9 +2067,9 @@
                             <p class="ah-item-name">${item.itemName}</p>
                             <p class="ah-item-meta">
                                 Quality: ${parseFloat(item.quality).toFixed(1)}%
-                                ${item.damage ? ' · DMG: ' + parseFloat(item.damage).toFixed(1) : ''}
-                                ${item.accuracy ? ' · ACC: ' + parseFloat(item.accuracy).toFixed(1) : ''}
-                                ${item.rarity ? ' · ' + item.rarity : ''}
+                                ${item.damage ? ' \u00B7 DMG: ' + parseFloat(item.damage).toFixed(1) : ''}
+                                ${item.accuracy ? ' \u00B7 ACC: ' + parseFloat(item.accuracy).toFixed(1) : ''}
+                                ${item.rarity ? ' \u00B7 ' + item.rarity : ''}
                             </p>
                             ${bonusHtml ? `<div class="ah-item-bonuses">${bonusHtml}</div>` : ''}
                             <p class="ah-players">Listed by: ${sellerHtml}</p>
@@ -2190,9 +2190,9 @@
                     <div class="ah-settings-row">
                         <label>Theme</label>
                         <div class="ah-theme-row">
-                            <button class="ah-theme-btn ${settings.theme === 'system' ? 'active' : ''}" data-theme="system">⚙️ System</button>
-                            <button class="ah-theme-btn ${settings.theme === 'light' ? 'active' : ''}" data-theme="light">☀️ Light</button>
-                            <button class="ah-theme-btn ${settings.theme === 'dark' ? 'active' : ''}" data-theme="dark">🌙 Dark</button>
+                            <button class="ah-theme-btn ${settings.theme === 'system' ? 'active' : ''}" data-theme="system">\u2699\uFE0F System</button>
+                            <button class="ah-theme-btn ${settings.theme === 'light' ? 'active' : ''}" data-theme="light">\u2600\uFE0F Light</button>
+                            <button class="ah-theme-btn ${settings.theme === 'dark' ? 'active' : ''}" data-theme="dark">\uD83C\uDF19 Dark</button>
                         </div>
                     </div>
                 </div>
@@ -2202,13 +2202,13 @@
                     <div class="ah-settings-row">
                         <label>Bonus Value</label>
                         <input type="number" id="ah-default-bonus-tol" value="${defaults.bonusTolerance}" min="0" max="100">
-                        <span class="ah-unit">± %</span>
+                        <span class="ah-unit">\u00B1 %</span>
                         <span style="color:var(--ah-text-faint);font-size:10px;margin-left:8px">(0 = exact match)</span>
                     </div>
                     <div class="ah-settings-row">
                         <label>Quality</label>
                         <input type="number" id="ah-default-quality-tol" value="${defaults.qualityTolerance}" min="0" max="100" ${defaults.ignoreQuality ? 'disabled' : ''}>
-                        <span class="ah-unit">± %</span>
+                        <span class="ah-unit">\u00B1 %</span>
                         <input type="checkbox" id="ah-default-ignore-quality" ${defaults.ignoreQuality ? 'checked' : ''}>
                         <span style="font-size:11px;color:var(--ah-text-secondary);">Any Quality</span>
                     </div>
@@ -2239,12 +2239,12 @@
                         <div class="ah-bonus-settings-item" data-bonus-id="${b.id}">
                             <span class="ah-bonus-name">${b.name}</span>
                             <div class="ah-field-group">
-                                <span class="ah-field-label">Bonus ±</span>
+                                <span class="ah-field-label">Bonus \u00B1</span>
                                 <input type="number" class="ah-bonus-tol" value="${b.bonusTolerance ?? defaults.bonusTolerance}" min="0" max="100">
                                 <span class="ah-field-label">%</span>
                             </div>
                             <div class="ah-field-group">
-                                <span class="ah-field-label">Quality ±</span>
+                                <span class="ah-field-label">Quality \u00B1</span>
                                 <input type="number" class="ah-quality-tol" value="${b.ignoreQuality ? '' : (b.qualityTolerance ?? defaults.qualityTolerance)}" min="0" max="100" ${b.ignoreQuality ? 'disabled' : ''}>
                                 <span class="ah-field-label">%</span>
                             </div>

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Item Matcher
-// @version      1.17
+// @version      1.18
 // @description  Matches the seller of items for the Mug Bot
 // @author       MonChoon
 // @match        https://www.torn.com/page.php?sid=ItemMarket*
@@ -379,7 +379,7 @@
         if (next === null) return;
         const trimmed = next.trim().replace(/\/+$/, '');
         if (trimmed && !/^https?:\/\//.test(trimmed)) {
-            alert('That does not look like a URL — it needs to start with http:// or https://');
+            alert('That does not look like a URL \u2014 it needs to start with http:// or https://');
             return;
         }
         if (trimmed) {
@@ -397,7 +397,7 @@
         if (ok === isMainServerAvailable) return;
         isMainServerAvailable = ok;
         addDebugLog(ok ? `\u2713 server reachable again (${serverUrl()})`
-                       : `\u26a0 SERVER UNREACHABLE: ${serverUrl()} — ${why}`);
+                       : `\u26a0 SERVER UNREACHABLE: ${serverUrl()} \u2014 ${why}`);
         updateStatsUI();
     }
     let anonServerLastCheckTime = null;
@@ -421,7 +421,7 @@
 
     // Verbose log: full sent/received JSON, only when VERBOSE is on.
     function vlog(message) {
-        if (VERBOSE) addDebugLog('🔍 ' + message);
+        if (VERBOSE) addDebugLog('\uD83D\uDD0D ' + message);
     }
 
     async function loadScriptState() {
@@ -613,8 +613,8 @@
                         lastFetchTime = new Date();
                         selectedSortedItemIndex = -1;
                         markMainServer(true);
-                        addDebugLog(`✓ Fetched ${uncachedItems.length} uncached items`);
-                        vlog('← /cache/uncached: ' + JSON.stringify(uncachedItems));
+                        addDebugLog(`\u2713 Fetched ${uncachedItems.length} uncached items`);
+                        vlog('\u2190 /cache/uncached: ' + JSON.stringify(uncachedItems));
 
                         await GM.setValue('uncachedItems', uncachedItems);
                         await GM.setValue('lastFetchTime', lastFetchTime.toISOString());
@@ -622,19 +622,19 @@
                         updateStatsUI();
                         highlightMatchingItems();
                     } catch (err) {
-                        addDebugLog(`✗ Parse error: ${err.message}`);
+                        addDebugLog(`\u2717 Parse error: ${err.message}`);
                         updateStatsUI();
                     }
                 } else {
                     markMainServer(false, `HTTP ${response.status}`);
-                    addDebugLog(`✗ Fetch failed (HTTP ${response.status})`);
+                    addDebugLog(`\u2717 Fetch failed (HTTP ${response.status})`);
                     updateStatsUI();
                 }
             },
             onerror: function() {
                 isFetching = false;
                 markMainServer(false, 'network error');
-                addDebugLog(`✗ Network error fetching uncached items`);
+                addDebugLog(`\u2717 Network error fetching uncached items`);
                 updateStatsUI();
             }
         });
@@ -669,7 +669,7 @@
                         gearCacheItems = data.listings || [];
                         gearCacheLastFetch = new Date();
                         markMainServer(true);
-                        addDebugLog(`✓ Fetched ${gearCacheItems.length} gear cache items`);
+                        addDebugLog(`\u2713 Fetched ${gearCacheItems.length} gear cache items`);
 
                         await GM.setValue('gearCacheItems', gearCacheItems);
                         await GM.setValue('gearCacheLastFetch', gearCacheLastFetch.toISOString());
@@ -677,19 +677,19 @@
                         updateStatsUI();
                         highlightMatchingItems();
                     } catch (err) {
-                        addDebugLog(`✗ Gear cache parse error: ${err.message}`);
+                        addDebugLog(`\u2717 Gear cache parse error: ${err.message}`);
                         updateStatsUI();
                     }
                 } else {
                     markMainServer(false, `HTTP ${response.status}`);
-                    addDebugLog(`✗ Gear cache fetch failed (HTTP ${response.status})`);
+                    addDebugLog(`\u2717 Gear cache fetch failed (HTTP ${response.status})`);
                     updateStatsUI();
                 }
             },
             onerror: function() {
                 isFetchingGearCache = false;
                 markMainServer(false, 'network error');
-                addDebugLog(`✗ Network error fetching gear cache`);
+                addDebugLog(`\u2717 Network error fetching gear cache`);
                 updateStatsUI();
             }
         });
@@ -730,14 +730,14 @@
                         anonGearCacheLastFetch = new Date();
 
                         if (!isAnonServerAvailable) {
-                            addDebugLog('✓ Anon server is back online!');
+                            addDebugLog('\u2713 Anon server is back online!');
                             isAnonServerAvailable = true;
                             anonServerLastCheckTime = new Date();
                             await GM.setValue('isAnonServerAvailable', true);
                             await GM.setValue('anonServerLastCheckTime', anonServerLastCheckTime.toISOString());
                         }
 
-                        addDebugLog(`✓ Fetched ${anonGearCacheItems.length} anon gear cache items`);
+                        addDebugLog(`\u2713 Fetched ${anonGearCacheItems.length} anon gear cache items`);
 
                         await GM.setValue('anonGearCacheItems', anonGearCacheItems);
                         await GM.setValue('anonGearCacheLastFetch', anonGearCacheLastFetch.toISOString());
@@ -745,11 +745,11 @@
                         updateStatsUI();
                         highlightMatchingItems();
                     } catch (err) {
-                        addDebugLog(`✗ Anon gear cache parse error: ${err.message}`);
+                        addDebugLog(`\u2717 Anon gear cache parse error: ${err.message}`);
                         updateStatsUI();
                     }
                 } else {
-                    addDebugLog(`✗ Anon gear cache fetch failed (HTTP ${response.status}) - marking server as unavailable`);
+                    addDebugLog(`\u2717 Anon gear cache fetch failed (HTTP ${response.status}) - marking server as unavailable`);
                     isAnonServerAvailable = false;
                     anonServerLastCheckTime = new Date();
                     await GM.setValue('isAnonServerAvailable', false);
@@ -761,7 +761,7 @@
                 isFetchingAnonGearCache = false;
 
                 if (isAnonServerAvailable) {
-                    addDebugLog(`⚠️ Anon server unreachable - anonymous items will be ignored until server is back online`);
+                    addDebugLog(`\u26A0\uFE0F Anon server unreachable - anonymous items will be ignored until server is back online`);
                 }
 
                 isAnonServerAvailable = false;
@@ -774,7 +774,7 @@
             ontimeout: async function() {
                 isFetchingAnonGearCache = false;
 
-                addDebugLog(`⚠️ Anon server timeout - marking as unavailable`);
+                addDebugLog(`\u26A0\uFE0F Anon server timeout - marking as unavailable`);
                 isAnonServerAvailable = false;
                 anonServerLastCheckTime = new Date();
                 await GM.setValue('isAnonServerAvailable', false);
@@ -1030,7 +1030,7 @@
 
         const label = listingData.item_name || (itemId ? `item ${itemId}` : 'gear');
         if (!scrapedData) {
-            addDebugLog(`⚠️ No stats panel — sending ${label} by armouryID only`);
+            addDebugLog(`\u26A0\uFE0F No stats panel \u2014 sending ${label} by armouryID only`);
         }
 
         if (isAnonymous) {
@@ -1137,16 +1137,16 @@
             console.log('[ITEM MATCHER] WOULD POST /items (' + payload.length + '):\n' + JSON.stringify(payload, null, 2));
             return;
         }
-        vlog('→ POST /items (' + payload.length + '): ' + JSON.stringify(payload));
+        vlog('\u2192 POST /items (' + payload.length + '): ' + JSON.stringify(payload));
         GM[httpRequest]({
             method: 'POST',
             url: `${serverUrl()}/items`,
             data: JSON.stringify({ listings: payload }),
             headers: { 'Content-Type': 'application/json' },
             onload: (r) => { markMainServer(r.status === 200, `HTTP ${r.status}`);
-                             addDebugLog(`✓ Sent ${payload.length} item listings`); vlog('← /items ' + r.status); },
+                             addDebugLog(`\u2713 Sent ${payload.length} item listings`); vlog('\u2190 /items ' + r.status); },
             onerror: () => { markMainServer(false, 'network error');
-                             addDebugLog(`✗ Error sending item listings`); }
+                             addDebugLog(`\u2717 Error sending item listings`); }
         });
     }
 
@@ -1155,7 +1155,7 @@
             console.log('[ITEM MATCHER] WOULD POST /gear:\n' + JSON.stringify(listingData, null, 2));
             return;
         }
-        vlog('→ POST /gear: ' + JSON.stringify(listingData));
+        vlog('\u2192 POST /gear: ' + JSON.stringify(listingData));
         GM[httpRequest]({
             method: 'POST',
             url: MAIN_SUBMIT_URL(),
@@ -1166,7 +1166,7 @@
                 if (response.status === 200) {
                     itemsSentCount++;
                     markMainServer(true);
-                    addDebugLog(`✓ Sent: ${listingData.item_name} ($${listingData.price})`);
+                    addDebugLog(`\u2713 Sent: ${listingData.item_name} ($${listingData.price})`);
 
                     // NOTE: we do NOT optimistically remove the item from the uncached list here. A
                     // 200 only means the server RECEIVED the capture — not that it verified the uid
@@ -1196,12 +1196,12 @@
                     refreshTileForListing(listingData);
                 } else {
                     markMainServer(false, `HTTP ${response.status}`);
-                    addDebugLog(`✗ Failed to send (HTTP ${response.status}): ${listingData.item_name}`);
+                    addDebugLog(`\u2717 Failed to send (HTTP ${response.status}): ${listingData.item_name}`);
                 }
             },
             onerror: function() {
                 markMainServer(false, 'network error');
-                addDebugLog(`✗ Network error sending: ${listingData.item_name}`);
+                addDebugLog(`\u2717 Network error sending: ${listingData.item_name}`);
             }
         });
     }
@@ -1236,7 +1236,7 @@
             onload: function(response) {
                 if (response.status === 200) {
                     anonItemsSentCount++;
-                    addDebugLog(`✓ Sent ANON: ${normalizedData.itemName} ($${normalizedData.price})`);
+                    addDebugLog(`\u2713 Sent ANON: ${normalizedData.itemName} ($${normalizedData.price})`);
 
                     anonGearCacheItems.push(normalizedData);
                     GM.setValue('anonGearCacheItems', anonGearCacheItems);
@@ -1245,11 +1245,11 @@
 
                     refreshTileForListing(normalizedData);
                 } else {
-                    addDebugLog(`✗ Failed to send ANON (HTTP ${response.status}): ${normalizedData.itemName}`);
+                    addDebugLog(`\u2717 Failed to send ANON (HTTP ${response.status}): ${normalizedData.itemName}`);
                 }
             },
             onerror: function() {
-                addDebugLog(`✗ Network error sending ANON (is local server running?): ${normalizedData.itemName}`);
+                addDebugLog(`\u2717 Network error sending ANON (is local server running?): ${normalizedData.itemName}`);
             }
         });
     }
@@ -1422,12 +1422,12 @@
         // Only click while collapsed, so a stray double-press can never reach a confirm inside the
         // already-open panel. Never touches View Info (the item encyclopedia).
         if (buy.getAttribute('aria-expanded') === 'true') {
-            console.log('[ITEM MATCHER] Easy.open: listing already expanded — not re-clicking');
+            console.log('[ITEM MATCHER] Easy.open: listing already expanded \u2014 not re-clicking');
             return true;
         }
         reveal(buy);
         buy.click();
-        console.log('[ITEM MATCHER] Easy.open: clicked Buy (expand) →', item && item.item_name);
+        console.log('[ITEM MATCHER] Easy.open: clicked Buy (expand) \u2192', item && item.item_name);
         return true;
     }
 
@@ -1438,10 +1438,10 @@
     // Now items leave the list only on the next server fetch, so the simple step is reliable and no
     // longer needs a second press.) Hotkey: E. Wraps around; the ~30s fetch clears captured weapons.
     function easyButtonStep() {
-        if (!isScriptEnabled) { addDebugLog('⚡ Easy: script is OFF'); return; }
+        if (!isScriptEnabled) { addDebugLog('\u26A1 Easy: script is OFF'); return; }
         const items = sortedUncachedItems();
         if (items.length === 0) {
-            addDebugLog('⚡ Easy: nothing left to capture');
+            addDebugLog('\u26A1 Easy: nothing left to capture');
             easyIndex = 0; easyPhase = 'navigate'; easyNavItem = null;
             updateStatsUI();
             return;
@@ -1452,18 +1452,18 @@
             easyNavItem = item;
             selectedSortedItemIndex = easyIndex;
             const url = generateItemSearchURL(item);
-            addDebugLog(`⚡ Easy: → ${item.item_name} (${easyIndex + 1}/${items.length}) — press again to open seller`);
+            addDebugLog(`\u26A1 Easy: \u2192 ${item.item_name} (${easyIndex + 1}/${items.length}) \u2014 press again to open seller`);
             easyPhase = 'open';
             updateStatsUI();
-            if (url) window.location.href = url; else addDebugLog(`⚡ Easy: no URL for ${item.item_name}`);
+            if (url) window.location.href = url; else addDebugLog(`\u26A1 Easy: no URL for ${item.item_name}`);
         } else {
             // Open the item we NAVIGATED to (not items[easyIndex], which may have shifted) — the green
             // tile is matched by name on the page.
             const item = easyNavItem || items[Math.min(easyIndex, items.length - 1)];
             const opened = openTargetTile(item);
             addDebugLog(opened
-                ? `⚡ Easy: opened ${item.item_name} — seller revealed/captured`
-                : `⚡ Easy: no green tile for ${item.item_name} (already captured?)`);
+                ? `\u26A1 Easy: opened ${item.item_name} \u2014 seller revealed/captured`
+                : `\u26A1 Easy: no green tile for ${item.item_name} (already captured?)`);
             easyIndex = (easyIndex + 1) % items.length;   // step to the next weapon
             easyPhase = 'navigate';
             updateStatsUI();
@@ -1522,7 +1522,7 @@
         const anonQueueSize = anonListingQueue.length;
 
         const fetchButtonColor = isFetching ? '#888' : '#4488ff';
-        const fetchButtonText = isFetching ? 'Fetching...' : '🔄 Fetch';
+        const fetchButtonText = isFetching ? 'Fetching...' : '\uD83D\uDD04 Fetch';
         const lastFetchText = lastFetchTime
             ? `Last: ${lastFetchTime.toLocaleTimeString()}`
             : 'Never fetched';
@@ -1531,8 +1531,8 @@
         let uncachedListHTML = '';
 
         if (isUncachedListVisible) {
-            const priceArrow = uncachedSortBy === 'price' ? (uncachedSortOrder === 'asc' ? ' ▲' : ' ▼') : '';
-            const nameArrow = uncachedSortBy === 'name' ? (uncachedSortOrder === 'asc' ? ' ▲' : ' ▼') : '';
+            const priceArrow = uncachedSortBy === 'price' ? (uncachedSortOrder === 'asc' ? ' \u25B2' : ' \u25BC') : '';
+            const nameArrow = uncachedSortBy === 'name' ? (uncachedSortOrder === 'asc' ? ' \u25B2' : ' \u25BC') : '';
 
             const sortPriceColor = uncachedSortBy === 'price' ? '#66ff66' : '#888';
             const sortPriceWeight = uncachedSortBy === 'price' ? 'bold' : 'normal';
@@ -1595,7 +1595,7 @@
             settingsContentHTML = `
                 <div style="margin-top: 8px; margin-bottom: 8px; border: 1px solid #333; padding: 8px; border-radius: 4px; background: #111;">
                     <div style="font-size: 10px; color: #aaa; margin-bottom: 6px;">
-                        Price Filter: Adds ±X% price range to uncached item search URLs
+                        Price Filter: Adds \u00B1X% price range to uncached item search URLs
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <label style="font-size: 11px; color: #888;">Percentage:</label>
@@ -1677,7 +1677,7 @@
                     font-weight: bold;
                     font-size: 12px;
                 ">
-                    Item Matcher — minimized (click to expand)
+                    Item Matcher \u2014 minimized (click to expand)
                 </div>
             `;
             document.getElementById('im-minimized').addEventListener('click', toggleMinimize);
@@ -1717,7 +1717,7 @@
                         cursor: pointer;
                         font-size: 10px;
                         margin-right: 4px;
-                    ">–</button>
+                    ">\u2013</button>
 
                     <button id="im-toggle-btn" style="
                         background: ${statusColor};
@@ -1733,10 +1733,10 @@
             </div>
 
             <div style="border-top: 1px solid #444; padding-top: 8px;">
-                <div>📊 Sent: <span style="color: #66ff66; font-weight: bold;">${itemsSentCount + anonItemsSentCount}</span></div>
-                <div>📦 Queue: <span style="color: ${(queueSize + anonQueueSize) > 0 ? '#ffaa66' : '#888'}; font-weight: bold;">${queueSize + anonQueueSize}</span></div>
+                <div>\uD83D\uDCCA Sent: <span style="color: #66ff66; font-weight: bold;">${itemsSentCount + anonItemsSentCount}</span></div>
+                <div>\uD83D\uDCE6 Queue: <span style="color: ${(queueSize + anonQueueSize) > 0 ? '#ffaa66' : '#888'}; font-weight: bold;">${queueSize + anonQueueSize}</span></div>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>🔧 Gear Cache: <span style="color: #0088ff; font-weight: bold;">${gearCacheItems.length}</span></div>
+                    <div>\uD83D\uDD27 Gear Cache: <span style="color: #0088ff; font-weight: bold;">${gearCacheItems.length}</span></div>
                     <button id="im-refresh-gear-btn" style="
                         background: ${isFetchingGearCache ? '#888' : '#0088ff'};
                         color: #fff;
@@ -1746,7 +1746,7 @@
                         cursor: ${isFetchingGearCache ? 'not-allowed' : 'pointer'};
                         font-size: 9px;
                         font-weight: bold;
-                    " ${isFetchingGearCache ? 'disabled' : ''}>${isFetchingGearCache ? '...' : '🔄'}</button>
+                    " ${isFetchingGearCache ? 'disabled' : ''}>${isFetchingGearCache ? '...' : '\uD83D\uDD04'}</button>
                 </div>
                 <div style="color: #666; font-size: 9px; margin-top: 2px;">
                     ${gearCacheLastFetch ? `Last: ${gearCacheLastFetch.toLocaleTimeString()}` : 'Never fetched'}
@@ -1784,10 +1784,10 @@
                 </div>
                 <div style="color: #666; font-size: 9px;">${lastFetchText}</div>
                 <div style="color: #888; font-size: 9px; margin-top: 2px;">
-                    Tile colours: <span style="color:#00ff00;">■</span> needs a seller (uncached) ·
+                    Tile colours: <span style="color:#00ff00;">\u25A0</span> needs a seller (uncached) \u00B7
                     no border = captured / not needed
                 </div>
-                <button id="im-easy-btn" title="Capture walker (hotkey: E). Press 1: go to the next uncached weapon's page. Press 2: expand its green listing (clicks Buy to reveal the seller — does NOT purchase). Then it advances." style="
+                <button id="im-easy-btn" title="Capture walker (hotkey: E). Press 1: go to the next uncached weapon's page. Press 2: expand its green listing (clicks Buy to reveal the seller \u2014 does NOT purchase). Then it advances." style="
                     width: 100%;
                     margin-top: 6px;
                     background: ${easyPhase === 'navigate' ? '#7a3cff' : '#ff8c1a'};
@@ -1798,7 +1798,7 @@
                     cursor: pointer;
                     font-size: 11px;
                     font-weight: bold;
-                ">⚡ Easy [E] — ${easyPhase === 'navigate' ? '▸ go to next weapon' : '● open seller'}</button>
+                ">\u26A1 Easy [E] \u2014 ${easyPhase === 'navigate' ? '\u25B8 go to next weapon' : '\u25CF open seller'}</button>
                 ${uncachedListHTML}
             </div>
 
