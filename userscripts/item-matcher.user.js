@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Item Matcher
-// @version      1.18
+// @version      1.19
 // @description  Matches the seller of items for the Mug Bot
 // @author       MonChoon
 // @match        https://www.torn.com/page.php?sid=ItemMarket*
@@ -323,8 +323,6 @@
         icon:       '[class*="icon___"]',
     };
 
-    let PRICE_FILTER_PERCENTAGE = 10;
-
     let pda = ('xmlhttpRequest' in GM);
     let httpRequest = pda ? 'xmlhttpRequest' : 'xmlHttpRequest';
 
@@ -342,7 +340,6 @@
     let isMinimized = false;
     let isDebugLogVisible = false;
     let isUncachedListVisible = false;
-    let isSettingsVisible = false;
     let uncachedSortBy = 'price';
     let uncachedSortOrder = 'asc';
 
@@ -357,6 +354,7 @@
     let easyPhase = 'navigate';   // 'navigate' (next press goes to the item) | 'open' (expands it)
     let easyIndex = 0;            // position in the current sorted uncached list
     let easyNavItem = null;       // the item we navigated to (opened on the next press)
+    let easyMisses = 0;           // consecutive failures to find the target tile on the page
 
     let gearCacheItems = [];
     let gearCacheLastFetch = null;
@@ -429,12 +427,9 @@
         autoFetchEnabled = await GM.getValue('autoFetchEnabled', true);
         isDebugLogVisible = await GM.getValue('isDebugLogVisible', false);
         isUncachedListVisible = await GM.getValue('isUncachedListVisible', false);
-        isSettingsVisible = await GM.getValue('isSettingsVisible', false);
         uncachedSortBy = await GM.getValue('uncachedSortBy', 'price');
         uncachedSortOrder = await GM.getValue('uncachedSortOrder', 'asc');
         isMinimized = await GM.getValue('isMinimized', false);
-
-        PRICE_FILTER_PERCENTAGE = await GM.getValue('priceFilterPercentage', 10);
 
         uncachedItems = await GM.getValue('uncachedItems', []);
         const storedFetchTime = await GM.getValue('lastFetchTime', null);
@@ -541,30 +536,6 @@
         isUncachedListVisible = !isUncachedListVisible;
         selectedSortedItemIndex = -1;
         await GM.setValue('isUncachedListVisible', isUncachedListVisible);
-        updateStatsUI();
-    }
-
-    async function toggleSettings() {
-        isSettingsVisible = !isSettingsVisible;
-        await GM.setValue('isSettingsVisible', isSettingsVisible);
-        updateStatsUI();
-    }
-
-    async function updatePriceFilter(value) {
-        const numValue = parseInt(value);
-        if (isNaN(numValue)) {
-            addDebugLog('Invalid price filter value');
-            return;
-        }
-
-        if (numValue < -1 || numValue > 100) {
-            addDebugLog('Price filter must be -1 (disabled) or 0-100');
-            return;
-        }
-
-        PRICE_FILTER_PERCENTAGE = numValue;
-        await GM.setValue('priceFilterPercentage', numValue);
-        addDebugLog(`Price filter updated: ${numValue === -1 ? 'DISABLED' : numValue + '%'}`);
         updateStatsUI();
     }
 
@@ -785,6 +756,32 @@
         });
     }
 
+    // The stats Torn prints on a tile: [damage, accuracy] for a weapon, [armor] for armour.
+    // Returns null for a tile with no stats at all (a stackable item), which never matches.
+    function tileStats(tile) {
+        const nameEl = tile.querySelector(SEL.name);
+        const pv = tile.querySelectorAll(`${SEL.property} ${SEL.value}`);
+        if (!nameEl || pv.length === 0) return null;
+        return {
+            name: nameEl.textContent.trim(),
+            damageArmor: parseFloat(pv[0].textContent.trim()),
+            accuracy: pv.length >= 2 ? parseFloat(pv[1].textContent.trim()) : 0,
+        };
+    }
+
+    // Is this tile the exact listing that uncached-list entry describes? Torn's stat filters only
+    // take INTEGER bounds, so a search for 44-45 armour returns the whole band — every 44.xx Dune
+    // Vest on the market. The decimals are the only thing that tells those listings apart, which
+    // makes this the difference between "a Dune Vest" and "the Dune Vest we still need a seller
+    // for". Same predicate decides the green border and the Easy walker's target, so what you see
+    // highlighted is exactly what E will open.
+    function itemMatchesTile(item, st) {
+        if (!st) return false;
+        if ((item.item_name || item.itemName) !== st.name) return false;
+        return parseFloat(item.damage_armor) === st.damageArmor
+            && parseFloat(item.accuracy || 0) === st.accuracy;
+    }
+
     // After a successful send, update ONLY the tile we just tagged — no full-page border wipe +
     // network refetch + rescan (which made every tile flash and lag on each click). The local
     // caches were already updated by the caller, so we just re-run processTile on the matching
@@ -795,18 +792,11 @@
         const dmg = parseFloat(data.damage_armor != null ? data.damage_armor : (data.stats && data.stats.damage));
         const acc = parseFloat((data.accuracy != null ? data.accuracy : (data.stats && data.stats.accuracy)) || 0);
         document.querySelectorAll(SEL.tile).forEach(tile => {
-            const nameEl = tile.querySelector(SEL.name);
-            if (!nameEl || nameEl.textContent.trim() !== name) return;
-            const pv = tile.querySelectorAll(`${SEL.property} ${SEL.value}`);
-            let tDmg = null, tAcc = 0;
-            if (pv.length >= 2) {
-                tDmg = parseFloat(pv[0].textContent.trim());
-                tAcc = parseFloat(pv[1].textContent.trim());
-            } else if (pv.length === 1) {
-                tDmg = parseFloat(pv[0].textContent.trim());
-            }
-            if (tDmg === dmg && (tAcc === acc || isNaN(acc))) {
-                processTile(tile, name, tDmg, tAcc);
+            const st = tileStats(tile);
+            if (!st || st.name !== name) return;
+            // A scrape that produced no accuracy still identifies the tile by damage alone.
+            if (st.damageArmor === dmg && (st.accuracy === acc || isNaN(acc))) {
+                processTile(tile, name, st.damageArmor, st.accuracy);
             }
         });
     }
@@ -874,13 +864,8 @@
         // the only reliable signal. Everything else gets NO border. (We used to paint "uncaptured
         // gear" blue by matching the local gear cache on stats, but armouryID-only captures have no
         // stats, so that flagged every already-captured weapon blue.)
-        const shouldBeGreen = uncachedItems.some(item => {
-            const uncachedItemName = item.item_name || item.itemName;
-            if (uncachedItemName !== itemName) return false;
-            const itemDamageArmor = parseFloat(item.damage_armor);
-            const itemAccuracy = parseFloat(item.accuracy || 0);
-            return itemDamageArmor === damageArmor && itemAccuracy === accuracy;
-        });
+        const shouldBeGreen = uncachedItems.some(item =>
+            itemMatchesTile(item, { name: itemName, damageArmor, accuracy }));
 
         // IDEMPOTENT: only touch the DOM when this tile's state actually changes. This is what
         // stops the whole page's borders from flashing every time you expand an item — tiles that
@@ -1351,27 +1336,19 @@
         const fromAccuracy = Math.floor(item.accuracy || 0);
         const toAccuracy = fromAccuracy + 1;
 
-        let priceParams = '';
+        // Exact price, not a band. Torn's own price filter takes priceFrom/priceTo, so pinning
+        // both to the listed price narrows the page itself to that one listing (when the price is
+        // still current) on top of the exact stat match below — no tolerance percentage, because
+        // the tile match no longer needs the page pre-filtered to cope; it only needs the target
+        // to be somewhere on it. A missing/zero price (shouldn't happen for gear, but don't filter
+        // on garbage) falls back to the un-narrowed band.
         const price = item.price ? parseInt(item.price, 10) : 0;
+        const priceParams = price > 0 ? `&priceFrom=${price}&priceTo=${price}` : '';
 
-        if (PRICE_FILTER_PERCENTAGE !== -1 && price > 0) {
-            if (PRICE_FILTER_PERCENTAGE === 0) {
-                priceParams = `&priceFrom=${price}&priceTo=${price}`;
-            } else {
-                const priceVariation = Math.floor(price * (PRICE_FILTER_PERCENTAGE / 100));
-                const priceFrom = price - priceVariation;
-                const priceTo = price + priceVariation;
-                priceParams = `&priceFrom=${priceFrom}&priceTo=${priceTo}`;
-            }
-        }
-
-        let searchURL;
         if (ARMOR_NAMES.has(item.item_name)) {
-            searchURL = `https://www.torn.com/page.php?sid=ItemMarket#/market/view=search&itemID=${itemID}&sortField=price&sortOrder=DESC&armorFrom=${fromValue}&armorTo=${toValue}${priceParams}`;
-        } else {
-            searchURL = `https://www.torn.com/page.php?sid=ItemMarket#/market/view=search&itemID=${itemID}&sortField=price&sortOrder=DESC&damageFrom=${fromValue}&damageTo=${toValue}&accuracyFrom=${fromAccuracy}&accuracyTo=${toAccuracy}${priceParams}`;
+            return `https://www.torn.com/page.php?sid=ItemMarket#/market/view=search&itemID=${itemID}&sortField=price&sortOrder=DESC&armorFrom=${fromValue}&armorTo=${toValue}${priceParams}`;
         }
-        return searchURL;
+        return `https://www.torn.com/page.php?sid=ItemMarket#/market/view=search&itemID=${itemID}&sortField=price&sortOrder=DESC&damageFrom=${fromValue}&damageTo=${toValue}&accuracyFrom=${fromAccuracy}&accuracyTo=${toAccuracy}${priceParams}`;
     }
 
     // Single source of truth for the uncached-list ordering (price/name, asc/desc), shared by the
@@ -1395,21 +1372,35 @@
     // Open the matched green (uncached) tile's listing so the seller is revealed + captured. The
     // seller-reveal control is the "Buy Item" cart button: in Torn's market it EXPANDS the listing's
     // panel (showing the seller + firing getListing) — it does NOT buy (that needs a separate confirm
-    // inside the expanded panel, which we never click). Scoped to the matched green tile only.
+    // inside the expanded panel, which we never click). Scoped to the one tile whose stats are an
+    // exact match for the item we are hunting.
     function openTargetTile(item) {
+        if (!item) return false;
+        // A stackable item carries no stats and needs no click: simply viewing its page captures
+        // every listing on it, which the navigate press already did.
+        if (item.damage_armor === undefined || item.damage_armor === null) {
+            console.log('[ITEM MATCHER] Easy.open: stackable \u2014 captured on view, nothing to open');
+            return true;
+        }
         const tiles = [...document.querySelectorAll(SEL.tile)];
-        const greens = tiles.filter(isGreenTile);
-        let target = item && greens.find(t => {
-            const n = t.querySelector(SEL.name);
-            return n && n.textContent.trim() === item.item_name;
-        });
-        if (!target) target = greens[0];
-        if (!target && item) target = tiles.find(t => {
-            const n = t.querySelector(SEL.name);
-            return n && n.textContent.trim() === item.item_name;
-        });
-        console.log(`[ITEM MATCHER] Easy.open: ${tiles.length} tiles, ${greens.length} green, target=${target ? target.querySelector(SEL.name)?.textContent.trim() : 'NONE'}`);
-        if (!target) return false;
+        // Match the EXACT listing by its stats. Matching on name alone opened whichever tile came
+        // first in the DOM, and since the walker does not re-fetch the page between presses, a
+        // listing we captured a moment ago is still sitting there in green — so two presses on a
+        // pair of Dune Vests (44.20 and 44.34) both opened the 44.20 and left the other behind.
+        // A tile can only be green if it matches an uncached entry on exactly this predicate, so
+        // the exact match is strictly stronger than the old green-then-name filter.
+        const exact = tiles.filter(t => itemMatchesTile(item, tileStats(t)));
+        // Two listings CAN share their stats to 2dp, and then nothing on the page tells them
+        // apart. Prefer one we have not already opened on this page so a duplicate pair is walked
+        // instead of re-opened; the mark dies with the page, which is the right lifetime.
+        const target = exact.find(t => t.dataset.imOpened !== '1') || exact[0];
+        if (!target) {
+            const want = `${item.item_name} ${item.damage_armor}/${item.accuracy || 0}`;
+            const saw = tiles.map(t => { const st = tileStats(t); return st ? `${st.name} ${st.damageArmor}/${st.accuracy}` : '?'; });
+            console.log(`[ITEM MATCHER] Easy.open: no tile matching ${want} among ${tiles.length}:`, saw);
+            return false;
+        }
+        console.log(`[ITEM MATCHER] Easy.open: ${tiles.length} tiles, ${exact.length} exact match(es), target=${target.querySelector(SEL.name)?.textContent.trim()} ${tileStats(target).damageArmor}`);
 
         const reveal = (el) => el && ['pointerover', 'mouseover', 'mouseenter'].forEach(t =>
             el.dispatchEvent(new MouseEvent(t, { bubbles: true })));
@@ -1423,9 +1414,11 @@
         // already-open panel. Never touches View Info (the item encyclopedia).
         if (buy.getAttribute('aria-expanded') === 'true') {
             console.log('[ITEM MATCHER] Easy.open: listing already expanded \u2014 not re-clicking');
+            target.dataset.imOpened = '1';
             return true;
         }
         reveal(buy);
+        target.dataset.imOpened = '1';
         buy.click();
         console.log('[ITEM MATCHER] Easy.open: clicked Buy (expand) \u2192', item && item.item_name);
         return true;
@@ -1442,7 +1435,7 @@
         const items = sortedUncachedItems();
         if (items.length === 0) {
             addDebugLog('\u26A1 Easy: nothing left to capture');
-            easyIndex = 0; easyPhase = 'navigate'; easyNavItem = null;
+            easyIndex = 0; easyPhase = 'navigate'; easyNavItem = null; easyMisses = 0;
             updateStatsUI();
             return;
         }
@@ -1457,14 +1450,28 @@
             updateStatsUI();
             if (url) window.location.href = url; else addDebugLog(`\u26A1 Easy: no URL for ${item.item_name}`);
         } else {
-            // Open the item we NAVIGATED to (not items[easyIndex], which may have shifted) — the green
-            // tile is matched by name on the page.
+            // Open the item we NAVIGATED to (not items[easyIndex], which may have shifted) — its
+            // tile is found by an exact stat match on the page.
             const item = easyNavItem || items[Math.min(easyIndex, items.length - 1)];
             const opened = openTargetTile(item);
-            addDebugLog(opened
-                ? `\u26A1 Easy: opened ${item.item_name} \u2014 seller revealed/captured`
-                : `\u26A1 Easy: no green tile for ${item.item_name} (already captured?)`);
-            easyIndex = (easyIndex + 1) % items.length;   // step to the next weapon
+            const label = item.damage_armor != null
+                ? `${item.item_name} ${item.damage_armor}` : item.item_name;
+            if (opened) {
+                addDebugLog(`\u26A1 Easy: opened ${label} \u2014 seller revealed/captured`);
+                easyMisses = 0;
+                easyIndex = (easyIndex + 1) % items.length;   // step to the next weapon
+            } else if (easyMisses < 1) {
+                // Requiring an exact stat match means a miss is usually just a page that has not
+                // finished rendering. Retry the SAME item by re-navigating instead of silently
+                // skipping it \u2014 bounded to one retry, so a listing that has since been pulled
+                // cannot stall the walker.
+                easyMisses++;
+                addDebugLog(`\u26A1 Easy: ${label} not on the page yet \u2014 press again to retry`);
+            } else {
+                addDebugLog(`\u26A1 Easy: no tile for ${label} (de-listed or already captured) \u2014 skipping`);
+                easyMisses = 0;
+                easyIndex = (easyIndex + 1) % items.length;
+            }
             easyPhase = 'navigate';
             updateStatsUI();
         }
@@ -1586,53 +1593,6 @@
             `;
         }
 
-        const priceFilterStatus = PRICE_FILTER_PERCENTAGE === -1 ?
-            '<span style="color: #ff6666;">DISABLED</span>' :
-            `<span style="color: #66ff66;">${PRICE_FILTER_PERCENTAGE}%</span>`;
-
-        let settingsContentHTML = '';
-        if (isSettingsVisible) {
-            settingsContentHTML = `
-                <div style="margin-top: 8px; margin-bottom: 8px; border: 1px solid #333; padding: 8px; border-radius: 4px; background: #111;">
-                    <div style="font-size: 10px; color: #aaa; margin-bottom: 6px;">
-                        Price Filter: Adds \u00B1X% price range to uncached item search URLs
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <label style="font-size: 11px; color: #888;">Percentage:</label>
-                        <input
-                            id="im-price-filter-input"
-                            type="number"
-                            value="${PRICE_FILTER_PERCENTAGE}"
-                            min="-1"
-                            max="100"
-                            style="
-                                width: 60px;
-                                background: #222;
-                                border: 1px solid #444;
-                                color: #fff;
-                                padding: 4px 6px;
-                                border-radius: 4px;
-                                font-size: 11px;
-                            "
-                        />
-                        <button id="im-price-filter-apply" style="
-                            background: #4488ff;
-                            color: #fff;
-                            border: none;
-                            padding: 4px 8px;
-                            border-radius: 4px;
-                            cursor: pointer;
-                            font-size: 10px;
-                            font-weight: bold;
-                        ">Apply</button>
-                    </div>
-                    <div style="font-size: 9px; color: #666; margin-top: 4px;">
-                        Use -1 to disable, or 0-100 for percentage range
-                    </div>
-                </div>
-            `;
-        }
-
         let debugLogsHTML = '';
         if (isDebugLogVisible) {
             if (debugLog.length > 0) {
@@ -1647,14 +1607,8 @@
 
         const controlsSection = `
             <div style="border-top: 1px solid #444; margin-top: 8px; padding-top: 8px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
-                    <div>
-                        <span style="color: #888;">Price Filter: </span>
-                        <span id="im-price-filter-toggle" style="cursor: pointer; text-decoration: underline;">${priceFilterStatus}</span>
-                    </div>
-                    <div>
-                        <span id="im-log-toggle" style="color: #4488ff; cursor: pointer; text-decoration: underline;">Log</span>
-                    </div>
+                <div style="display: flex; justify-content: flex-end; align-items: center; font-size: 10px;">
+                    <span id="im-log-toggle" style="color: #4488ff; cursor: pointer; text-decoration: underline;">Log</span>
                 </div>
                 <div style="font-size: 9px; margin-top: 4px;">
                     <span style="color: #666;">Server: </span>
@@ -1663,7 +1617,6 @@
                         cursor: pointer; text-decoration: underline; word-break: break-all;
                     ">${serverUrl().replace(/^https?:\/\//, '')}</span>
                 </div>
-                ${settingsContentHTML}
                 ${debugLogsHTML}
             </div>
         `;
@@ -1813,30 +1766,10 @@
         document.getElementById('im-refresh-gear-btn')?.addEventListener('click', () => fetchGearCache(true));
         document.getElementById('im-refresh-anon-btn')?.addEventListener('click', () => fetchAnonGearCache(true));
         document.getElementById('im-uncached-toggle')?.addEventListener('click', toggleUncachedList);
-        document.getElementById('im-price-filter-toggle')?.addEventListener('click', toggleSettings);
         document.getElementById('im-log-toggle')?.addEventListener('click', toggleDebugLog);
         document.getElementById('im-server-url')?.addEventListener('click', promptForServerUrl);
         document.getElementById('im-uncached-sort-price')?.addEventListener('click', () => setUncachedSort('price'));
         document.getElementById('im-uncached-sort-name')?.addEventListener('click', () => setUncachedSort('name'));
-
-        const priceFilterInput = document.getElementById('im-price-filter-input');
-        const priceFilterApply = document.getElementById('im-price-filter-apply');
-
-        if (priceFilterApply) {
-            priceFilterApply.addEventListener('click', () => {
-                if (priceFilterInput) {
-                    updatePriceFilter(priceFilterInput.value);
-                }
-            });
-        }
-
-        if (priceFilterInput) {
-            priceFilterInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    updatePriceFilter(priceFilterInput.value);
-                }
-            });
-        }
 
         // Restore the scroll positions captured before the rebuild.
         if (_prevLogScroll != null) {
