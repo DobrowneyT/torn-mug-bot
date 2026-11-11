@@ -9,7 +9,7 @@ import logging
 
 from server.logging_utils import RedactSecretsFilter, install_redaction, redact
 
-URL = ("https://api.torn.com/v2/market/249/itemmarket?key=NR4JqeruuzmtoQ2y"
+URL = ("https://api.torn.com/v2/market/249/itemmarket?key=FAKEkey0TESTabcd"
        "&comment=MonChoon+Market+Tracker")
 
 
@@ -30,8 +30,8 @@ def test_redacts_lazy_args():
     logger, stream = _capture()
     logger.info("HTTP Request: %s %s", "GET", URL)
     out = stream.getvalue()
-    assert "NR4JqeruuzmtoQ2y" not in out
-    assert "key=…oQ2y" in out
+    assert "FAKEkey0TESTabcd" not in out
+    assert "key=…abcd" in out
     assert "market/249/itemmarket" in out   # the useful part of the URL survives
 
 
@@ -39,14 +39,14 @@ def test_redacts_preformatted_message():
     logger, stream = _capture()
     logger.info(f"fetching {URL}")
     out = stream.getvalue()
-    assert "NR4JqeruuzmtoQ2y" not in out
-    assert "key=…oQ2y" in out
+    assert "FAKEkey0TESTabcd" not in out
+    assert "key=…abcd" in out
 
 
 def test_redacts_dict_args():
     logger, stream = _capture()
     logger.info("%(method)s %(url)s", {"method": "GET", "url": URL})
-    assert "NR4JqeruuzmtoQ2y" not in stream.getvalue()
+    assert "FAKEkey0TESTabcd" not in stream.getvalue()
 
 
 def test_multiple_keys_in_one_line_all_redacted():
